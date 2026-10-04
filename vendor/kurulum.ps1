@@ -26,7 +26,7 @@ if ($LASTEXITCODE -ne 0) {
     throw "Derleme başarısız. Visual Studio 2022 Build Tools ve Windows SDK kurulu mu? (bkz. docs/README.md)"
 }
 
-$yayinAdi = "app-foto_v$($damga.Substring(0, 8))saat$($damga.Substring(8, 4)).exe"
+$yayinAdi = "app-foto_v$damga.exe"
 New-Item -ItemType Directory -Force -Path release | Out-Null
 # release/ her zaman tek taze kopya taşır: eski adlar temizlenir.
 Remove-Item release/gorsel.exe, release/app-foto_v*.exe -Force -ErrorAction SilentlyContinue

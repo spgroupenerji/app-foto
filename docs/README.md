@@ -17,7 +17,7 @@ egui arayüz çerçevesi ve wgpu grafik altyapısıyla geliştirilen, çok iş p
 
 ## Hazır Uygulama
 
-`release` klasöründeki `app-foto_v<YYYYMMDD>saat<HHmm>.exe` dosyası kurulum gerektirmez ve doğrudan çalıştırılır. Klasörde yalnızca en güncel sürüm bulundurulur; her derlemede önceki sürümler otomatik olarak kaldırılır. Dosya adındaki damga, derleme anını gösterir ve uygulama içindeki sürüm bilgisiyle aynıdır.
+`release` klasöründeki `app-foto_v<YYYYMMDDHHMM>.exe` dosyası kurulum gerektirmez ve doğrudan çalıştırılır. Klasörde yalnızca en güncel sürüm bulundurulur; her derlemede önceki sürümler otomatik olarak kaldırılır. Dosya adındaki damga, derleme anını gösterir ve uygulama içindeki sürüm bilgisiyle aynıdır.
 
 ## Kaynaktan Derleme
 
@@ -27,7 +27,7 @@ Gereksinimler: Rust (MSVC hedefi) ve Visual Studio 2022 C++ Build Tools (Windows
 powershell -ExecutionPolicy Bypass -File vendor\kurulum.ps1
 ```
 
-Betik ön koşulları denetler, sürüm damgasını üretir, uygulamayı derler, çıktıyı `release\app-foto_v<YYYYMMDD>saat<HHmm>.exe` adıyla kopyalar, önceki kopyaları kaldırır ve 20 kontrolü kapsayan kendi kendini test çalıştırır. Bağımlılıklar ilk derlemede `Cargo.lock` sürümleriyle otomatik iner; sonraki derlemeler artımlıdır.
+Betik ön koşulları denetler, sürüm damgasını üretir, uygulamayı derler, çıktıyı `release\app-foto_v<YYYYMMDDHHMM>.exe` adıyla kopyalar, önceki kopyaları kaldırır ve 20 kontrolü kapsayan kendi kendini test çalıştırır. Bağımlılıklar ilk derlemede `Cargo.lock` sürümleriyle otomatik iner; sonraki derlemeler artımlıdır.
 
 Elle derlemede (`cargo build --release`) ikili ara ürün olarak `target\release\gorsel.exe` altında üretilir; depoya girmez. Takip edilen yayın kopyası yalnızca damgalı adla `release\` altında oluşturulur.
 
