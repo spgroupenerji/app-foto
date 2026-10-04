@@ -6,7 +6,8 @@ use crate::girdi::Eylem;
 use super::HudSonucu;
 
 /// Pencere dışına taşmayı önlemek için menü ölçüsü sınırları.
-const MENU_EN_COK_YUKSEKLIK: f32 = 320.0;
+/// 9 madde × 44 px dokunmatik hedef + ayraçlar sığmalı.
+const MENU_EN_COK_YUKSEKLIK: f32 = 460.0;
 
 /// Bağlam menüsünü çizer; seçim yapıldığında veya dışarı tıklanınca kapanır.
 pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
@@ -88,7 +89,8 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
     // Menü dışına tıklama menüyü kapatır.
     let menu_dikdortgeni = ic.response.rect;
     let basildi = ctx.input(|i| i.pointer.any_pressed());
-    let imlec = ctx.input(|i| i.pointer.interact_pos());    if basildi && !imlec.is_some_and(|p| menu_dikdortgeni.contains(p)) {
+    let imlec = ctx.input(|i| i.pointer.interact_pos());
+    if basildi && !imlec.is_some_and(|p| menu_dikdortgeni.contains(p)) {
         kapat = true;
     }
     if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -102,9 +104,13 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
 
 /// Menü maddesi; tıklandıysa `true`.
 fn madde(ui: &mut egui::Ui, etiket: &str, ipucu: &str) -> bool {
-    ui.add(egui::Button::new(etiket).frame(false).min_size(egui::vec2(200.0, 0.0)))
-        .on_hover_text(ipucu)
-        .clicked()
+    ui.add(
+        egui::Button::new(etiket)
+            .frame(false)
+            .min_size(egui::vec2(200.0, 0.0)),
+    )
+    .on_hover_text(ipucu)
+    .clicked()
 }
 
 #[cfg(test)]

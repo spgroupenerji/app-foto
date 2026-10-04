@@ -21,7 +21,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
         )
     } else {
         (
-            egui::Color32::from_rgba_unmultiplied(26, 30, 38, (230.0 * alfa) as u8),
+            egui::Color32::from_rgba_unmultiplied(28, 28, 33, (230.0 * alfa) as u8),
             egui::Color32::from_rgba_unmultiplied(90, 110, 140, (180.0 * alfa) as u8),
         )
     };
@@ -29,7 +29,10 @@ pub fn ciz(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
     // Yüzen alanlar bağlam üzerinden çizilir; bağlam tutamacı klonlanarak ödünç çakışması önlenir.
     let ctx = ui.ctx().clone();
     egui::Area::new(egui::Id::new("gorsel-bildirim"))
-        .anchor(egui::Align2::CENTER_BOTTOM, egui::vec2(0.0, DUVAR_DIBI_KAYDIRMA))
+        .anchor(
+            egui::Align2::CENTER_BOTTOM,
+            egui::vec2(0.0, DUVAR_DIBI_KAYDIRMA),
+        )
         .interactable(false)
         .show(&ctx, |ui| {
             egui::Frame::popup(ui.style())

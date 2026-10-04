@@ -104,11 +104,7 @@ fn ust_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
                     pivot: None,
                 });
             }
-            ui.label(
-                egui::RichText::new(durum.zoom_metni())
-                    .monospace()
-                    .strong(),
-            );
+            ui.label(egui::RichText::new(durum.zoom_metni()).monospace().strong());
             if duz_dugme(ui, "+", "Yakınlaştır (Ctrl + +)") {
                 sonuc.ekle(Eylem::Yakinlastir {
                     carpan: crate::girdi::klavye::TUS_ZOOM_CARPI,
@@ -131,7 +127,11 @@ fn ust_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
             }
             if duz_dugme(
                 ui,
-                if durum.tam_ekran { "Pencere" } else { "Tam ekran" },
+                if durum.tam_ekran {
+                    "Pencere"
+                } else {
+                    "Tam ekran"
+                },
                 "Tam ekran (F11 / F / çift tık)",
             ) {
                 sonuc.ekle(Eylem::TamEkranDegistir);
@@ -166,18 +166,20 @@ fn alt_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
             ui.spacing_mut().item_spacing.x = 10.0;
             match &durum.aktif {
                 Some(meta) => {
-                    ui.label(egui::RichText::new(crate::goruntu::bicim::bicim_adi(meta.bicim)).strong());
+                    ui.label(
+                        egui::RichText::new(crate::goruntu::bicim::bicim_adi(meta.bicim)).strong(),
+                    );
                     ui.label(meta.cozunurluk_metni());
                     ui.label(meta.megapiksel_metni());
                     ui.label(meta.boyut_metni());
                     if meta.yonelim > 1 {
-                        ui.label(format!("⟲ {}", crate::goruntu::meta::yonelim_adi(meta.yonelim)));
+                        ui.label(format!(
+                            "⟲ {}",
+                            crate::goruntu::meta::yonelim_adi(meta.yonelim)
+                        ));
                     }
                     if meta.ham_genislik != meta.genislik {
-                        ui.label(format!(
-                            "ham {}×{}",
-                            meta.ham_genislik, meta.ham_yukseklik
-                        ));
+                        ui.label(format!("ham {}×{}", meta.ham_genislik, meta.ham_yukseklik));
                     }
                 }
                 None => {
@@ -216,11 +218,15 @@ fn menu_maddesi(ui: &mut egui::Ui, etiket: &str, ipucu: &str) -> bool {
     tiklandi
 }
 
-/// Simgesiz, kenarlıksız düğme; ipucu metni taşır.
+/// Simgesiz, kenarlıksız düğme; en az 44×44 dokunmatik hedef taşır.
 fn duz_dugme(ui: &mut egui::Ui, etiket: &str, ipucu: &str) -> bool {
-    ui.add(egui::Button::new(etiket).frame(false))
-        .on_hover_text(ipucu)
-        .clicked()
+    ui.add(
+        egui::Button::new(etiket)
+            .frame(false)
+            .min_size(egui::vec2(super::DOKUNMATIK_HEDEF, super::DOKUNMATIK_HEDEF)),
+    )
+    .on_hover_text(ipucu)
+    .clicked()
 }
 
 /// Renkli, küçük bilgi rozeti.

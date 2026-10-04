@@ -107,7 +107,7 @@ impl Default for Ayarlar {
             dogal_siralama: true,
             tekerlek_zoom_carpani: 1.15,
             varsayilan_zoom: VarsayilanZoom::default(),
-            arka_plan: [24, 24, 28],
+            arka_plan: [22, 22, 26],
             cift_tik_tam_ekran: true,
             mica_etkin: true,
             dizin_izle: true,
@@ -128,7 +128,8 @@ impl Ayarlar {
         if !yol.exists() {
             return Ok(Self::default());
         }
-        let metin = std::fs::read_to_string(yol).map_err(|k| GorselHatasi::Ayar(format!("{} okunamadı: {k}", yol.display())))?;
+        let metin = std::fs::read_to_string(yol)
+            .map_err(|k| GorselHatasi::Ayar(format!("{} okunamadı: {k}", yol.display())))?;
         serde_json::from_str(&metin)
             .map_err(|k| GorselHatasi::Ayar(format!("{} çözümlenemedi: {k}", yol.display())))
     }

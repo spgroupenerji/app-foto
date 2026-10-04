@@ -19,7 +19,15 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
             ui.horizontal(|ui| {
                 ui.heading("Bilgi");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui.small_button("✕").on_hover_text("Paneli kapat (I)").clicked() {
+                    if ui
+                        .add(
+                            egui::Button::new("✕")
+                                .small()
+                                .min_size(egui::vec2(super::DOKUNMATIK_HEDEF, 0.0)),
+                        )
+                        .on_hover_text("Paneli kapat (I)")
+                        .clicked()
+                    {
                         acik = false;
                     }
                 });
@@ -30,11 +38,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                 match &durum.aktif {
                     Some(meta) => {
                         satir(ui, "Dosya", &meta.dosya_adi);
-                        satir(
-                            ui,
-                            "Biçim",
-                            crate::goruntu::bicim::bicim_adi(meta.bicim),
-                        );
+                        satir(ui, "Biçim", crate::goruntu::bicim::bicim_adi(meta.bicim));
                         satir(ui, "Çözünürlük", &meta.cozunurluk_metni());
                         satir(ui, "Megapiksel", &meta.megapiksel_metni());
                         satir(ui, "Boyut", &meta.boyut_metni());
@@ -65,7 +69,10 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                                 "Ön küçültme",
                                 &format!(
                                     "{}×{} → {}×{}",
-                                    meta.ham_genislik, meta.ham_yukseklik, meta.genislik, meta.yukseklik
+                                    meta.ham_genislik,
+                                    meta.ham_yukseklik,
+                                    meta.genislik,
+                                    meta.yukseklik
                                 ),
                             );
                         }
@@ -105,7 +112,11 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                 ui.add_space(8.0);
                 ui.separator();
                 ui.label(egui::RichText::new("Ekran").strong());
-                satir(ui, "HDR yüzey", if durum.hdr_yuzey { "Açık" } else { "Kapalı" });
+                satir(
+                    ui,
+                    "HDR yüzey",
+                    if durum.hdr_yuzey { "Açık" } else { "Kapalı" },
+                );
                 satir(
                     ui,
                     "Ton haritalama",
@@ -118,7 +129,11 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                     },
                 );
                 satir(ui, "Grafik aygıtı", &durum.adaptor_bilgisi);
-                satir(ui, "Kare süresi", &format!("{:.1} ms", durum.kare_suresi_ms));
+                satir(
+                    ui,
+                    "Kare süresi",
+                    &format!("{:.1} ms", durum.kare_suresi_ms),
+                );
 
                 ui.add_space(8.0);
                 ui.separator();
