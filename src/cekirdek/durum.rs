@@ -51,8 +51,6 @@ pub struct UygulamaDurumu {
     pub mesaj: Option<Mesaj>,
     /// Ayarlar penceresi açık mı.
     pub ayar_penceresi: bool,
-    /// Meta veri paneli açık mı.
-    pub meta_panel_acik: bool,
     /// Pencere tam ekran kipinde mi.
     pub tam_ekran: bool,
     /// Bağlam menüsü konumu (ekran pikseli) — açık değilse `None`.
@@ -84,7 +82,6 @@ impl UygulamaDurumu {
             hdr_yuzey: false,
             mesaj: None,
             ayar_penceresi: false,
-            meta_panel_acik: true,
             tam_ekran: false,
             baglam_menusu: None,
             adaptor_bilgisi: String::new(),
@@ -202,7 +199,13 @@ impl UygulamaDurumu {
     }
 
     /// Pivot odaklı yakınlaştırma uygular.
-    pub fn yakinlastir(&mut self, carpan: f64, pivot: Pivot, pencere: (u32, u32), goruntu: (u32, u32)) {
+    pub fn yakinlastir(
+        &mut self,
+        carpan: f64,
+        pivot: Pivot,
+        pencere: (u32, u32),
+        goruntu: (u32, u32),
+    ) {
         let (pw, ph) = (f64::from(pencere.0.max(1)), f64::from(pencere.1.max(1)));
         self.gorunum.pivot_ile_olcekle(carpan, pivot, pw, ph);
         self.gorunum.sinirla(goruntu.0, goruntu.1, pw, ph);
@@ -256,7 +259,9 @@ mod testler {
 
     fn durum(adet: usize) -> UygulamaDurumu {
         let mut d = UygulamaDurumu::yeni(Ayarlar::default());
-        let liste: Vec<PathBuf> = (0..adet).map(|i| PathBuf::from(format!("r{i}.jpg"))).collect();
+        let liste: Vec<PathBuf> = (0..adet)
+            .map(|i| PathBuf::from(format!("r{i}.jpg")))
+            .collect();
         d.indeksi_kur(liste, None);
         d
     }
@@ -364,7 +369,10 @@ mod testler {
         for _ in 0..50 {
             d.yakinlastir(
                 2.0,
-                Pivot { ekran_x: 100.0, ekran_y: 100.0 },
+                Pivot {
+                    ekran_x: 100.0,
+                    ekran_y: 100.0,
+                },
                 (800, 600),
                 (200, 200),
             );

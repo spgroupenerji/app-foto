@@ -6,8 +6,8 @@ use crate::girdi::Eylem;
 use super::HudSonucu;
 
 /// Pencere dışına taşmayı önlemek için menü ölçüsü sınırları.
-/// 9 madde × 44 px dokunmatik hedef + ayraçlar sığmalı.
-const MENU_EN_COK_YUKSEKLIK: f32 = 460.0;
+/// 12 madde × 44 px dokunmatik hedef + ayraçlar sığmalı.
+const MENU_EN_COK_YUKSEKLIK: f32 = 600.0;
 
 /// Bağlam menüsünü çizer; seçim yapıldığında veya dışarı tıklanınca kapanır.
 pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
@@ -68,7 +68,32 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                     ui.separator();
                     if madde(
                         ui,
-                        if durum.meta_panel_acik {
+                        if durum.ayarlar.dosya_listesi_acik {
+                            "Dizin listesini gizle"
+                        } else {
+                            "Dizin listesini göster"
+                        },
+                        "L",
+                    ) {
+                        sonuc.ekle(Eylem::DosyaListesiDegistir);
+                        kapat = true;
+                    }
+                    if madde(
+                        ui,
+                        if durum.ayarlar.dosya_listesi_yeri == crate::cekirdek::ayar::PanelYeri::Sol
+                        {
+                            "Dizin listesini sağa taşı"
+                        } else {
+                            "Dizin listesini sola taşı"
+                        },
+                        "Liste kenarı",
+                    ) {
+                        sonuc.ekle(Eylem::DosyaListesiYeriDegistir);
+                        kapat = true;
+                    }
+                    if madde(
+                        ui,
+                        if durum.ayarlar.bilgi_paneli_acik {
                             "Bilgi panelini gizle"
                         } else {
                             "Bilgi panelini göster"

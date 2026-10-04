@@ -1,6 +1,8 @@
 //! Ayarlar penceresi: görünüm, ön yükleme, renk ve kabuk entegrasyonu seçenekleri.
 
-use crate::cekirdek::ayar::{Filtre, OnYuklemeGenisligi, SagTikDavranisi, VarsayilanZoom};
+use crate::cekirdek::ayar::{
+    Filtre, OnYuklemeGenisligi, PanelYeri, SagTikDavranisi, Tema, VarsayilanZoom,
+};
 use crate::cekirdek::durum::UygulamaDurumu;
 use crate::girdi::Eylem;
 
@@ -20,6 +22,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                 girdi_bolumu(ui, durum, sonuc);
                 on_yukleme_bolumu(ui, durum, sonuc);
                 gorunum_bolumu(ui, durum, sonuc);
+                arayuz_bolumu(ui, durum, sonuc);
                 pencere_bolumu(ui, durum, sonuc);
                 kabuk_bolumu(ui, durum, sonuc);
             });
@@ -41,10 +44,7 @@ fn girdi_bolumu(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSo
             (SagTikDavranisi::Gezinme, "Önceki görsel"),
             (SagTikDavranisi::Menu, "Bağlam menüsü"),
         ] {
-            if ui
-                .radio_value(&mut ayar.sag_tik, deger, etiket)
-                .changed()
-            {
+            if ui.radio_value(&mut ayar.sag_tik, deger, etiket).changed() {
                 sonuc.ayar_degisti = true;
             }
         }
@@ -83,7 +83,10 @@ fn on_yukleme_bolumu(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut 
             (OnYuklemeGenisligi::Normal, "Normal (±2)"),
             (OnYuklemeGenisligi::Genis, "Geniş (±3)"),
         ] {
-            if ui.radio_value(&mut ayar.on_yukleme, deger, etiket).changed() {
+            if ui
+                .radio_value(&mut ayar.on_yukleme, deger, etiket)
+                .changed()
+            {
                 sonuc.ayar_degisti = true;
             }
         }
@@ -166,6 +169,57 @@ fn gorunum_bolumu(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut Hud
     ui.separator();
 }
 
+/// Tema ve panel görünürlüğü ayarları; değişiklikler anında uygulanır ve kalıcıdır.
+fn arayuz_bolumu(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
+    ui.heading("Arayüz");
+    let ayar = &mut durum.ayarlar;
+
+    ui.horizontal_wrapped(|ui| {
+        ui.label("Tema:");
+        for (deger, etiket) in [
+            (Tema::Koyu, "Koyu"),
+            (Tema::Acik, "Açık"),
+            (Tema::Sistem, "Sistem"),
+        ] {
+            if ui
+                .radio_value(&mut ayar.tema, deger, etiket)
+                .on_hover_text("Sistem seçeneği Windows'un koyu/açık tercihini izler")
+                .changed()
+            {
+                sonuc.ayar_degisti = true;
+            }
+        }
+    });
+
+    if ui
+        .checkbox(&mut ayar.dosya_listesi_acik, "Dizin listesi paneli")
+        .on_hover_text("Açık dizindeki görselleri yan panelde listeler (L)")
+        .changed()
+    {
+        sonuc.ayar_degisti = true;
+    }
+    ui.horizontal_wrapped(|ui| {
+        ui.label("Dizin listesi yeri:");
+        for (deger, etiket) in [(PanelYeri::Sol, "Sol"), (PanelYeri::Sag, "Sağ")] {
+            if ui
+                .radio_value(&mut ayar.dosya_listesi_yeri, deger, etiket)
+                .changed()
+            {
+                sonuc.ayar_degisti = true;
+            }
+        }
+    });
+
+    if ui
+        .checkbox(&mut ayar.bilgi_paneli_acik, "Bilgi paneli")
+        .on_hover_text("Meta veri, önbellek, ekran ve kısayol bilgileri (I)")
+        .changed()
+    {
+        sonuc.ayar_degisti = true;
+    }
+    ui.separator();
+}
+
 /// Pencere ve sıralama ayarları.
 fn pencere_bolumu(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
     ui.heading("Pencere");
@@ -228,7 +282,9 @@ fn kabuk_bolumu(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSo
     ui.horizontal_wrapped(|ui| {
         if ui
             .button("İlişkilendirmeyi kaydet")
-            .on_hover_text("Desteklenen uzantıları bu uygulamaya kaydeder (yalnızca kullanıcı hesabı)")
+            .on_hover_text(
+                "Desteklenen uzantıları bu uygulamaya kaydeder (yalnızca kullanıcı hesabı)",
+            )
             .clicked()
         {
             sonuc.ekle(Eylem::IliskilendirmeKaydet);

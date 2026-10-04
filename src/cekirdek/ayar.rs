@@ -84,6 +84,14 @@ pub struct Ayarlar {
     pub mica_etkin: bool,
     /// Dizin izleyici (notify) etkin mi.
     pub dizin_izle: bool,
+    /// Arayüz teması.
+    pub tema: Tema,
+    /// Bilgi paneli açık mı (varsayılan kapalı; araç çubuğu ikonuyla açılır).
+    pub bilgi_paneli_acik: bool,
+    /// Dizin listesi paneli açık mı.
+    pub dosya_listesi_acik: bool,
+    /// Dizin listesi panelinin ekran kenarı.
+    pub dosya_listesi_yeri: PanelYeri,
 }
 
 /// Yeni görsel açılışında uygulanacak yakınlaştırma kipi.
@@ -94,6 +102,25 @@ pub enum VarsayilanZoom {
     Sigdir,
     GercekBoyut,
     PencereGenisligi,
+}
+
+/// Arayüz teması; "sistem" Windows'un koyu/açık tercihini izler.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Tema {
+    #[default]
+    Koyu,
+    Acik,
+    Sistem,
+}
+
+/// Yan panelin ekran kenarı.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum PanelYeri {
+    #[default]
+    Sol,
+    Sag,
 }
 
 impl Default for Ayarlar {
@@ -111,6 +138,10 @@ impl Default for Ayarlar {
             cift_tik_tam_ekran: true,
             mica_etkin: true,
             dizin_izle: true,
+            tema: Tema::default(),
+            bilgi_paneli_acik: false,
+            dosya_listesi_acik: true,
+            dosya_listesi_yeri: PanelYeri::default(),
         }
     }
 }
@@ -170,6 +201,11 @@ mod testler {
         assert!(ayar.dogal_siralama);
         assert_eq!(OnYuklemeGenisligi::Normal.komsu_sayisi(), 2);
         assert_eq!(OnYuklemeGenisligi::Kapali.vram_komsu(), 0);
+        // Bilgi paneli kapalı başlar; dizin listesi solda açık gelir.
+        assert_eq!(ayar.tema, Tema::Koyu);
+        assert!(!ayar.bilgi_paneli_acik);
+        assert!(ayar.dosya_listesi_acik);
+        assert_eq!(ayar.dosya_listesi_yeri, PanelYeri::Sol);
     }
 
     #[test]
@@ -183,12 +219,18 @@ mod testler {
         ayar.olcek_filtresi = Filtre::Lanczos3;
         ayar.sag_tik = SagTikDavranisi::Menu;
         ayar.arka_plan = [1, 2, 3];
+        ayar.tema = Tema::Sistem;
+        ayar.bilgi_paneli_acik = true;
+        ayar.dosya_listesi_yeri = PanelYeri::Sag;
         ayar.kaydet_dosyaya(&yol).expect("kaydedilmeli");
 
         let geri = Ayarlar::yukle_dosyadan(&yol).expect("yüklenmeli");
         assert_eq!(geri.olcek_filtresi, Filtre::Lanczos3);
         assert_eq!(geri.sag_tik, SagTikDavranisi::Menu);
         assert_eq!(geri.arka_plan, [1, 2, 3]);
+        assert_eq!(geri.tema, Tema::Sistem);
+        assert!(geri.bilgi_paneli_acik);
+        assert_eq!(geri.dosya_listesi_yeri, PanelYeri::Sag);
 
         let _ = std::fs::remove_dir_all(&dizin);
     }
@@ -199,6 +241,23 @@ mod testler {
         let _ = std::fs::remove_file(&yol);
         let ayar = Ayarlar::yukle_dosyadan(&yol).expect("varsayılan gelmeli");
         assert_eq!(ayar.ram_onbellek_mb, Ayarlar::default().ram_onbellek_mb);
+    }
+
+    #[test]
+    fn eski_ayar_dosyasi_yeni_alanlari_tamamlar() {
+        let dizin = std::env::temp_dir().join("gorsel-ayar-eski-testi");
+        let _ = std::fs::remove_dir_all(&dizin);
+        std::fs::create_dir_all(&dizin).expect("dizin");
+        let yol = dizin.join(Ayarlar::DOSYA_ADI);
+        // Yeni alanları içermeyen eski ayar dosyası: eksikler varsayılanla doldurulmalı.
+        std::fs::write(&yol, r#"{"ram_onbellek_mb":256}"#).expect("yazılmalı");
+        let geri = Ayarlar::yukle_dosyadan(&yol).expect("yüklenmeli");
+        assert_eq!(geri.ram_onbellek_mb, 256);
+        assert_eq!(geri.tema, Tema::Koyu);
+        assert!(!geri.bilgi_paneli_acik);
+        assert!(geri.dosya_listesi_acik);
+        assert_eq!(geri.dosya_listesi_yeri, PanelYeri::Sol);
+        let _ = std::fs::remove_dir_all(&dizin);
     }
 
     #[test]

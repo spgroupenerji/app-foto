@@ -1,13 +1,12 @@
 //! Meta veri paneli: dosya, görüntü, renk, önbellek ve aygıt bilgileri.
 
 use crate::cekirdek::durum::UygulamaDurumu;
-use crate::girdi::Eylem;
 
 use super::HudSonucu;
 
-/// Sağ tarafta açılıp kapanan meta veri panelini çizer.
+/// Sağ tarafta açılıp kapanan meta veri panelini çizer; durumu `Ayarlar`'da kalıcıdır.
 pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
-    if !durum.meta_panel_acik {
+    if !durum.ayarlar.bilgi_paneli_acik {
         return;
     }
     let mut acik = true;
@@ -150,8 +149,8 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
         });
 
     if !acik {
-        durum.meta_panel_acik = false;
-        sonuc.ekle(Eylem::Yok);
+        durum.ayarlar.bilgi_paneli_acik = false;
+        sonuc.ayar_degisti = true;
     }
 }
 

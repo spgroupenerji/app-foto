@@ -11,9 +11,10 @@ egui arayüz çerçevesi ve wgpu grafik altyapısıyla geliştirilen, çok iş p
 - Catmull-Rom filtreyle keskin ölçekleme; Ctrl+tekerlek ile imleç odaklı akıcı yakınlaştırma, sığdırma ve yüzde yüz gerçek boyut
 - Kayan pencere ile komşu görsellerin ön yüklenmesi; ayarlanabilir RAM önbelleği (64 MB–8 GB) ve VRAM komşu doku desteğiyle akıcı gezinme
 - Ok tuşları, PageUp/PageDown, Home/End ve tıklama bölgeleriyle hızlı gezinme; sürükle-bırak ile dosya ve klasör açma
-- Windows Gezgini ile aynı doğal sıralama; dizin değişikliklerinin canlı izlenmesi; tek örnek (single instance) davranışı
-- Meta veri paneli (biçim, çözünürlük, renk profili, önbellek ve aygıt bilgisi), ayarlar penceresi, bağlam menüsü ve tam ekran kipi
-- Kurumsal koyu tema; WCAG 2.5.5 ve Apple HIG ile uyumlu 44 px dokunma hedefleri
+- Windows Gezgini ile aynı doğal sıralama; dizin değişikliklerinin canlı izlenmesi; tek örnek (single instance) davranışında liste ve gezinmede yalnızca desteklenen biçimlerin yer alması
+- Kapatılabilir dizin listesi paneli (sol veya sağ kenarda, tıklanarak görsel geçişi); varsayılan kapalı açılan bilgi paneli (biçim, çözünürlük, renk profili, önbellek ve aygıt bilgisi), ayarlar penceresi, bağlam menüsü ve tam ekran kipi
+- Koyu/açık/sistem tema seçimi ve araç çubuğundan hızlı tema geçişi; panel ve tema tercihlerinin oturumlar arası hatırlanması
+- Kurumsal koyu ve açık palet; WCAG 2.5.5 ve Apple HIG ile uyumlu 44 px dokunma hedefleri
 
 ## Hazır Uygulama
 

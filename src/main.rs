@@ -9,7 +9,6 @@
 // Yayın derlemesinde konsol penceresi açılmaz (GUI alt sistemi); geliştirme derlemesinde
 // günlükleri görebilmek için konsol korunur.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-
 // Clippy: aşağıdaki pedantik kurallar bilinçli olarak kapalıdır.
 // - `collapsible_if`: platforma özgü `#[cfg]` bloklarında iç içe `if let` zinciri,
 //   tek satırda birleştirilmiş koşuldan daha okunurdur ve hata ayıklaması kolaydır.
@@ -52,10 +51,12 @@ fn main() -> ExitCode {
 
     // Yalnızca bilgi amaçlı bayraklar terminal çıktısı üretir; GUI kipinde bunlar için
     // üst sürecin konsoluna bağlanılır (aksi halde çıktı hiçbir yere gitmez).
-    if argumanlar
-        .iter()
-        .any(|a| matches!(a.as_str(), "--dogrula" | "--surum" | "-v" | "--yardim" | "-h"))
-    {
+    if argumanlar.iter().any(|a| {
+        matches!(
+            a.as_str(),
+            "--dogrula" | "--surum" | "-v" | "--yardim" | "-h"
+        )
+    }) {
         konsola_baglan();
     }
 
@@ -63,7 +64,11 @@ fn main() -> ExitCode {
         return dogrulama::calistir_ve_kod();
     }
     if argumanlar.iter().any(|a| a == "--surum" || a == "-v") {
-        println!("gorsel {} {}", env!("CARGO_PKG_VERSION"), env!("DERLEME_SURUMU"));
+        println!(
+            "gorsel {} {}",
+            env!("CARGO_PKG_VERSION"),
+            env!("DERLEME_SURUMU")
+        );
         return ExitCode::SUCCESS;
     }
     if argumanlar.iter().any(|a| a == "--yardim" || a == "-h") {
@@ -139,9 +144,8 @@ fn gunluk_dosyasi() -> Option<std::fs::File> {
 
 /// env_logger'ı dosya + konsol hedefiyle kurar.
 fn gunlugu_kur() {
-    let mut kurucu = env_logger::Builder::from_env(
-        env_logger::Env::default().default_filter_or("info"),
-    );
+    let mut kurucu =
+        env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"));
     kurucu.format_timestamp_secs();
     if let Some(dosya) = gunluk_dosyasi() {
         kurucu.target(env_logger::Target::Pipe(Box::new(IkiliYazici { dosya })));
@@ -158,13 +162,13 @@ fn gunlugu_kur() {
 /// çağrılsaydı `SetStdHandle` boru/redirect hedefini ezer ve çıktı kaybolurdu.
 #[cfg(all(windows, not(debug_assertions)))]
 fn konsola_baglan() {
-    use windows::core::PCWSTR;
     use windows::Win32::Storage::FileSystem::{
         CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING,
     };
     use windows::Win32::System::Console::{
-        AttachConsole, SetStdHandle, ATTACH_PARENT_PROCESS, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE,
+        ATTACH_PARENT_PROCESS, AttachConsole, STD_ERROR_HANDLE, STD_OUTPUT_HANDLE, SetStdHandle,
     };
+    use windows::core::PCWSTR;
 
     let ad: Vec<u16> = "CONOUT$\0".encode_utf16().collect();
     unsafe {
@@ -261,6 +265,7 @@ KISAYOLLAR:
   F11 / F / çift tık           tam ekran
   Ctrl + K                     ayarlar
   I                            bilgi panelini aç/kapat
+  L                            dizin listesini aç/kapat
 
 NOT: Uygulama GUI alt sisteminde çalışır, konsol penceresi açılmaz.
      --dogrula raporu her durumda %LOCALAPPDATA%\Gorsel\dogrulama-raporu.txt

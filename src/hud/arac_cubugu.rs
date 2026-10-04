@@ -1,5 +1,6 @@
 //! Üst araç çubuğu ve alt durum çubuğu.
 
+use crate::cekirdek::ayar::{PanelYeri, Tema};
 use crate::cekirdek::durum::UygulamaDurumu;
 use crate::girdi::Eylem;
 
@@ -51,7 +52,29 @@ fn ust_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
                     }
                     if menu_maddesi(
                         ui,
-                        if durum.meta_panel_acik {
+                        if durum.ayarlar.dosya_listesi_acik {
+                            "Dizin listesini gizle"
+                        } else {
+                            "Dizin listesini göster"
+                        },
+                        "L",
+                    ) {
+                        sonuc.ekle(Eylem::DosyaListesiDegistir);
+                    }
+                    if menu_maddesi(
+                        ui,
+                        if durum.ayarlar.dosya_listesi_yeri == PanelYeri::Sol {
+                            "Dizin listesini sağa taşı"
+                        } else {
+                            "Dizin listesini sola taşı"
+                        },
+                        "Liste kenarı",
+                    ) {
+                        sonuc.ekle(Eylem::DosyaListesiYeriDegistir);
+                    }
+                    if menu_maddesi(
+                        ui,
+                        if durum.ayarlar.bilgi_paneli_acik {
                             "Bilgi panelini gizle"
                         } else {
                             "Bilgi panelini göster"
@@ -59,6 +82,23 @@ fn ust_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
                         "I",
                     ) {
                         sonuc.ekle(Eylem::MetaPaneliDegistir);
+                    }
+                    ui.separator();
+                    ui.label(egui::RichText::new("Tema").weak());
+                    for (tema, etiket) in [
+                        (Tema::Koyu, "Koyu"),
+                        (Tema::Acik, "Açık"),
+                        (Tema::Sistem, "Sistem"),
+                    ] {
+                        let secili = durum.ayarlar.tema == tema;
+                        let satir = if secili {
+                            format!("{etiket} ✓")
+                        } else {
+                            etiket.to_string()
+                        };
+                        if menu_maddesi(ui, &satir, "Görünüm teması") {
+                            sonuc.ekle(Eylem::TemaSec(tema));
+                        }
                     }
                     ui.separator();
                     if menu_maddesi(ui, "Ayarlar…", "Ctrl+K") {
@@ -116,6 +156,28 @@ fn ust_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
             }
             if duz_dugme(ui, "%100", "Gerçek boyut (G)") {
                 sonuc.ekle(Eylem::GercekBoyut);
+            }
+            ui.separator();
+
+            // Paneller ve tema: sık kullanılan görünüm anahtarları.
+            if duz_dugme(ui, "☰", "Dizin listesini göster/gizle (L)") {
+                sonuc.ekle(Eylem::DosyaListesiDegistir);
+            }
+            if duz_dugme(ui, "ℹ", "Bilgi panelini göster/gizle (I)") {
+                sonuc.ekle(Eylem::MetaPaneliDegistir);
+            }
+            let tema_hedefi = if durum.ayarlar.tema == Tema::Acik {
+                Tema::Koyu
+            } else {
+                Tema::Acik
+            };
+            let tema_etiketi = if tema_hedefi == Tema::Koyu {
+                "🌙"
+            } else {
+                "☀"
+            };
+            if duz_dugme(ui, tema_etiketi, "Koyu/açık tema değiştir") {
+                sonuc.ekle(Eylem::TemaSec(tema_hedefi));
             }
             ui.separator();
 

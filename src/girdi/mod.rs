@@ -7,6 +7,7 @@ pub mod bolge;
 pub mod fare;
 pub mod klavye;
 
+use crate::cekirdek::ayar::Tema;
 use bolge::Pivot;
 
 /// Kullanıcının tetiklediği soyut eylem.
@@ -46,6 +47,14 @@ pub enum Eylem {
     YenidenYukle,
     AyarPenceresi,
     MetaPaneliDegistir,
+    /// Dizin listesinde tıklanan görsle gidilir.
+    Git(usize),
+    /// Dizin listesi panelini göster/gizle.
+    DosyaListesiDegistir,
+    /// Dizin listesi panelini sol/sağ kenar arasında değiştir.
+    DosyaListesiYeriDegistir,
+    /// Arayüz temasını seç (koyu/açık/sistem).
+    TemaSec(Tema),
     BaglamMenusu {
         x: f64,
         y: f64,
@@ -96,11 +105,13 @@ mod testler {
     fn gorunum_eylemleri_dogru_isaretli() {
         assert!(Eylem::Sigdir.gorunumu_etkiler());
         assert!(Eylem::Surukle { dx: 1.0, dy: 0.0 }.gorunumu_etkiler());
-        assert!(Eylem::Yakinlastir {
-            carpan: 1.2,
-            pivot: None
-        }
-        .gorunumu_etkiler());
+        assert!(
+            Eylem::Yakinlastir {
+                carpan: 1.2,
+                pivot: None
+            }
+            .gorunumu_etkiler()
+        );
         assert!(!Eylem::BirlikteAc.gorunumu_etkiler());
         assert!(!Eylem::TamEkranDegistir.gorunumu_etkiler());
     }

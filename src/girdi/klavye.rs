@@ -62,6 +62,7 @@ pub fn tus_eylemi(kod: KeyCode, ctrl: bool, shift: bool) -> Eylem {
         KeyCode::KeyF | KeyCode::F11 => Eylem::TamEkranDegistir,
         KeyCode::Escape => Eylem::TamEkranDegistir,
         KeyCode::KeyR => Eylem::YenidenYukle,
+        KeyCode::KeyL => Eylem::DosyaListesiDegistir,
         // Kaydırma: Shift ile yatay, normalde dikey onarım yapılmaz.
         _ if shift => Eylem::Yok,
         _ => Eylem::Yok,
@@ -75,7 +76,10 @@ mod testler {
     #[test]
     fn ok_tuslari_gezinir() {
         assert_eq!(tus_eylemi(KeyCode::ArrowLeft, false, false), Eylem::Onceki);
-        assert_eq!(tus_eylemi(KeyCode::ArrowRight, false, false), Eylem::Sonraki);
+        assert_eq!(
+            tus_eylemi(KeyCode::ArrowRight, false, false),
+            Eylem::Sonraki
+        );
         assert_eq!(tus_eylemi(KeyCode::PageUp, false, false), Eylem::Onceki);
         assert_eq!(tus_eylemi(KeyCode::PageDown, false, false), Eylem::Sonraki);
         assert_eq!(tus_eylemi(KeyCode::Space, false, false), Eylem::Sonraki);
@@ -112,9 +116,19 @@ mod testler {
     fn gorunum_ve_pencere_kisayollari() {
         assert_eq!(tus_eylemi(KeyCode::KeyS, false, false), Eylem::Sigdir);
         assert_eq!(tus_eylemi(KeyCode::KeyG, false, false), Eylem::GercekBoyut);
-        assert_eq!(tus_eylemi(KeyCode::F11, false, false), Eylem::TamEkranDegistir);
-        assert_eq!(tus_eylemi(KeyCode::Escape, false, false), Eylem::TamEkranDegistir);
+        assert_eq!(
+            tus_eylemi(KeyCode::F11, false, false),
+            Eylem::TamEkranDegistir
+        );
+        assert_eq!(
+            tus_eylemi(KeyCode::Escape, false, false),
+            Eylem::TamEkranDegistir
+        );
         assert_eq!(tus_eylemi(KeyCode::KeyR, false, false), Eylem::YenidenYukle);
+        assert_eq!(
+            tus_eylemi(KeyCode::KeyL, false, false),
+            Eylem::DosyaListesiDegistir
+        );
     }
 
     #[test]

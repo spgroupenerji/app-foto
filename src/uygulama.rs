@@ -12,7 +12,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 
-use crate::cekirdek::ayar::Ayarlar;
+use crate::cekirdek::ayar::{Ayarlar, PanelYeri, Tema};
 use crate::cekirdek::durum::UygulamaDurumu;
 use crate::dizin::izleyici::{DizinIzleyici, DizinOlayi};
 use crate::gio::isci::{IsciHavuzu, Istek, Yanit};
@@ -60,6 +60,10 @@ pub struct Uygulama {
     bekleyen_diyalog: Option<DiyalogTuru>,
     /// Menüden çıkış istendi mi (olay döngüsü `about_to_wait` içinde kapanır).
     cikis_istendi: bool,
+    /// Paneller/tema gibi ayar alanları değişti: bir sonraki karede diske yazılır.
+    ayar_degisti: bool,
+    /// egui bağlamına uygulanan son tema; farklıysa bir sonraki karede yeniden uygulanır.
+    tema_uygulandi: Option<Tema>,
 
     // Pencereye bağlı bileşenler (resumed ile kurulur).
     gpu: Option<Gpu>,
@@ -100,13 +104,13 @@ impl Uygulama {
             durum,
             ayarlar,
             isci,
-            onbellek: Onbellek::yeni(onbellek_bayt, |g: &IslenmisGoruntu| {
-                g.veri.len() as u64 * 2
-            }),
+            onbellek: Onbellek::yeni(onbellek_bayt, |g: &IslenmisGoruntu| g.veri.len() as u64 * 2),
             baslangic_yolu: baslatma.baslangic_yolu,
             son_dizin: None,
             bekleyen_diyalog: None,
             cikis_istendi: false,
+            ayar_degisti: false,
+            tema_uygulandi: None,
             gpu: None,
             pencere: None,
             yuzey: None,
@@ -206,13 +210,16 @@ impl Uygulama {
             Some(gpu.device.limits().max_texture_dimension_2d as usize),
         );
         let _ = &mut egui_winit;
-        hud::tema_kur(&self.egui_baglam);
 
         self.durum.hdr_yuzey = yuzey.hdr_aktif();
         log::info!(
             "yüzey: {:?}, HDR {}, gama kodlaması {}",
             yuzey.format(),
-            if yuzey.hdr_aktif() { "açık" } else { "kapalı" },
+            if yuzey.hdr_aktif() {
+                "açık"
+            } else {
+                "kapalı"
+            },
             if yuzey.gama_kodlamasi_shaderda() {
                 "shader'da"
             } else {
@@ -244,10 +251,11 @@ impl Uygulama {
         }
 
         // Tarama dizini: açık klasör, yoksa odak dosyanın klasörü.
-        let dizin = self
-            .son_dizin
-            .clone()
-            .or_else(|| self.baslangic_yolu.as_ref().and_then(|p| dosyanin_dizini(p)));
+        let dizin = self.son_dizin.clone().or_else(|| {
+            self.baslangic_yolu
+                .as_ref()
+                .and_then(|p| dosyanin_dizini(p))
+        });
         let Some(dizin) = dizin else {
             self.durum.bilgi_ver(
                 "Görsel açmak için Dosya ▸ Aç… kullanın, dosyayı pencereye bırakın \
@@ -344,7 +352,11 @@ impl Uygulama {
                 g.meta.genislik,
                 g.meta.yukseklik,
                 if g.meta.icc_uygulandi { ", ICC" } else { "" },
-                if g.meta.kucultuldu { ", ön küçültme" } else { "" }
+                if g.meta.kucultuldu {
+                    ", ön küçültme"
+                } else {
+                    ""
+                }
             );
             self.durum.hdr_kaynak = g.hdr;
             self.durum.aktif = Some(g.meta.clone());
@@ -442,7 +454,8 @@ impl Uygulama {
                 }
             }
         }
-        self.onbellek.suz_ve_tahliye(|yol| zaten_tutulacak.contains(yol));
+        self.onbellek
+            .suz_ve_tahliye(|yol| zaten_tutulacak.contains(yol));
     }
 
     /// Dizin izleyiciyi kurar; ayar kapalıysa veya kurulum başarısızsa sessizce devam eder.
@@ -652,7 +665,35 @@ impl Uygulama {
                 self.durum.bilgi_ver("Görsel yeniden yüklendi.");
             }
             Eylem::AyarPenceresi => self.durum.ayar_penceresi = !self.durum.ayar_penceresi,
-            Eylem::MetaPaneliDegistir => self.durum.meta_panel_acik = !self.durum.meta_panel_acik,
+            Eylem::MetaPaneliDegistir => {
+                self.ayarlar.bilgi_paneli_acik = !self.ayarlar.bilgi_paneli_acik;
+                self.ayar_degisti = true;
+            }
+            Eylem::Git(sira) => {
+                let onceki = self.durum.konum;
+                self.durum.git(sira);
+                if self.durum.konum != onceki {
+                    self.son_yon = oneyukleme::yon_belirle(onceki, self.durum.konum);
+                    self.cozme_iste();
+                }
+            }
+            Eylem::DosyaListesiDegistir => {
+                self.ayarlar.dosya_listesi_acik = !self.ayarlar.dosya_listesi_acik;
+                self.ayar_degisti = true;
+            }
+            Eylem::DosyaListesiYeriDegistir => {
+                self.ayarlar.dosya_listesi_yeri = match self.ayarlar.dosya_listesi_yeri {
+                    PanelYeri::Sol => PanelYeri::Sag,
+                    PanelYeri::Sag => PanelYeri::Sol,
+                };
+                self.ayar_degisti = true;
+            }
+            Eylem::TemaSec(tema) => {
+                if self.ayarlar.tema != tema {
+                    self.ayarlar.tema = tema;
+                    self.ayar_degisti = true;
+                }
+            }
             Eylem::BaglamMenusu { x, y } => self.durum.baglam_menusu = Some((x as f32, y as f32)),
             Eylem::BaglamMenusuKapat => self.durum.baglam_menusu = None,
             Eylem::Kapat => {
@@ -706,7 +747,8 @@ impl Uygulama {
         match crate::kabuk::iliskilendirme::iliskilendirmeyi_kaldir() {
             Ok(()) => {
                 self.durum.iliskilendirme_durumu = iliskilendirme_metni();
-                self.durum.bilgi_ver("Dosya ilişkilendirme kayıtları silindi.");
+                self.durum
+                    .bilgi_ver("Dosya ilişkilendirme kayıtları silindi.");
             }
             Err(k) => self.durum.hata_ver(&k),
         }
@@ -772,7 +814,10 @@ impl Uygulama {
     /// olarak alınır, böylece eylem uygulama (kendisi de `&mut self` ister) arada çalışabilir.
     fn cerceve_ciz(&mut self) {
         let baslangic = Instant::now();
-        if self.gpu.is_none() || self.pencere.is_none() || self.yuzey.is_none() || self.cizim.is_none()
+        if self.gpu.is_none()
+            || self.pencere.is_none()
+            || self.yuzey.is_none()
+            || self.cizim.is_none()
         {
             return;
         }
@@ -792,6 +837,12 @@ impl Uygulama {
 
         // egui bağlamı Arc tabanlı bir tutamaçtır: klonlamak ucuzdur ve ödünç çakışmasını önler.
         let ctx = self.egui_baglam.clone();
+        // Tema tercihi değiştiyse (ilk kare dahil) palet ve tercih yeniden uygulanır.
+        if self.tema_uygulandi != Some(self.ayarlar.tema) {
+            hud::tema_uygula(&ctx, self.ayarlar.tema);
+            self.tema_uygulandi = Some(self.ayarlar.tema);
+            self.kirli = true;
+        }
         let durum = &mut self.durum;
         let mut hud_sonuc = hud::HudSonucu::default();
         // egui 0.36 kök arayüzü `Ui` üzerinden çalıştırır; paneller bu kökün içine yerleşir.
@@ -812,12 +863,15 @@ impl Uygulama {
 
         let hud::HudSonucu {
             eylemler,
-            ayar_degisti,
+            ayar_degisti: hud_ayari_degisti,
         } = hud_sonuc;
         for eylem in eylemler {
             self.eylem_uygula(eylem);
         }
-        if ayar_degisti {
+        // Paneller ve tema (`self.ayar_degisti`) ile ayar penceresi (`hud_ayari_degisti`)
+        // aynı kayıt yolunu paylaşır; değişiklik anında diske yazılır.
+        if hud_ayari_degisti || self.ayar_degisti {
+            self.ayar_degisti = false;
             if let Err(k) = self.ayarlar.kaydet() {
                 log::warn!("ayarlar kaydedilemedi: {k}");
             }
@@ -885,16 +939,15 @@ impl Uygulama {
     fn dosya_birakildi(&mut self, yol: PathBuf) {
         if yol.is_dir() {
             self.klasoru_ac(yol);
-            self.durum.bilgi_ver("Klasör açıldı; ilk görsel gösteriliyor.");
+            self.durum
+                .bilgi_ver("Klasör açıldı; ilk görsel gösteriliyor.");
         } else if crate::dizin::tarayici::gorsel_adayi_mi(&yol) {
             self.yolu_ac(yol);
         } else {
-            self.durum.hata_ver(
-                &crate::cekirdek::hata::GorselHatasi::DesteklenmeyenBicim(format!(
-                    "{} desteklenen bir görsel değil",
-                    yol.display()
-                )),
-            );
+            self.durum
+                .hata_ver(&crate::cekirdek::hata::GorselHatasi::DesteklenmeyenBicim(
+                    format!("{} desteklenen bir görsel değil", yol.display()),
+                ));
         }
     }
 }
@@ -963,9 +1016,11 @@ impl ApplicationHandler<PathBuf> for Uygulama {
                 self.kirli = true;
             }
             WindowEvent::ScaleFactorChanged { .. } => {
-                if let (Some(pencere), Some(gpu), Some(yuzey)) =
-                    (self.pencere.as_ref(), self.gpu.as_ref(), self.yuzey.as_mut())
-                {
+                if let (Some(pencere), Some(gpu), Some(yuzey)) = (
+                    self.pencere.as_ref(),
+                    self.gpu.as_ref(),
+                    self.yuzey.as_mut(),
+                ) {
                     let olcu = pencere.inner_size();
                     yuzey.yeniden_boyutla(gpu, olcu.width, olcu.height);
                 }
@@ -996,9 +1051,9 @@ impl ApplicationHandler<PathBuf> for Uygulama {
                             // Çift tıklama: pencere sistemleri tık sayısını vermez,
                             // bu yüzden iki basış arasındaki süre ölçülür.
                             let simdi = Instant::now();
-                            let cift = self
-                                .son_tik
-                                .is_some_and(|onceki| simdi.duration_since(onceki) < CIFT_TIK_ARALIGI);
+                            let cift = self.son_tik.is_some_and(|onceki| {
+                                simdi.duration_since(onceki) < CIFT_TIK_ARALIGI
+                            });
                             if cift {
                                 self.son_tik = None;
                                 let eylem = fare::cift_tik_eylemi(self.ayarlar.cift_tik_tam_ekran);
@@ -1011,8 +1066,8 @@ impl ApplicationHandler<PathBuf> for Uygulama {
                             }
                         }
                         MouseButton::Right => {
-                            let gezinme =
-                                self.ayarlar.sag_tik == crate::cekirdek::ayar::SagTikDavranisi::Gezinme;
+                            let gezinme = self.ayarlar.sag_tik
+                                == crate::cekirdek::ayar::SagTikDavranisi::Gezinme;
                             let eylem =
                                 fare::sag_tik_eylemi(gezinme, self.son_imlec.0, self.son_imlec.1);
                             self.eylem_uygula(eylem);
