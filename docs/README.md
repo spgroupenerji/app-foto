@@ -19,7 +19,7 @@ Uygulamanın her derlemesi `build.rs` tarafından otomatik numaralandırılır:
 4. Değişen `release/gorsel.exe` commit'lenir.
 
 **Yeni bilgisayarda** `git clone` sonrası tek komut: `powershell -ExecutionPolicy
-Bypass -File kurulum.ps1` — araçları denetler, derler, kopyalar ve doğrular.
+Bypass -File vendor/kurulum.ps1` — araçları denetler, derler, kopyalar ve doğrular.
 Bağımlılıklar `Cargo.lock` sürümleriyle ilk derlemede otomatik iner.
 
 Derleme çıktıları yerel `target/` altındadır; `cargo clean` yalnızca `target/` siler.

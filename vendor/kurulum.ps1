@@ -1,7 +1,7 @@
 ﻿# Görsel Görüntüleyici — yeni bilgisayar kurulum ve derleme betiği.
 #
 # Kullanım:
-#   powershell -ExecutionPolicy Bypass -File kurulum.ps1
+#   powershell -ExecutionPolicy Bypass -File vendor/kurulum.ps1
 #
 # Sıra: araç denetimi → derleme (target/) → yayın kopyası (release/) → kendi kendini test.
 
