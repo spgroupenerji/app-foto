@@ -1,8 +1,12 @@
 //! Meta veri paneli: dosya, görüntü, renk, önbellek ve aygıt bilgileri.
 
+use crate::cekirdek::ayar::BILGI_GENISLIK_ARALIGI;
 use crate::cekirdek::durum::UygulamaDurumu;
 
 use super::HudSonucu;
+
+/// Sürüklenme bittikten sonra kaydedilecek genişlik bilgisinin egui anahtarı.
+const GENISLIK_BELLEGI: &str = "gorsel-meta-paneli-genislik";
 
 /// Sağ tarafta açılıp kapanan meta veri panelini çizer; durumu `Ayarlar`'da kalıcıdır.
 pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
@@ -12,9 +16,14 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
     let mut acik = true;
     egui::containers::Panel::right("gorsel-meta-paneli")
         .resizable(true)
+        .size_range(egui::Rangef::new(
+            *BILGI_GENISLIK_ARALIGI.start(),
+            *BILGI_GENISLIK_ARALIGI.end(),
+        ))
+        .default_size(durum.ayarlar.bilgi_paneli_genislik)
         .show(ui, |ui| {
-            ui.set_max_width(420.0);
-            ui.set_min_width(200.0);
+            // Genişlik ayarı sürükleme bitince tek kez diske yazılır.
+            genisligi_tazele(ui, durum, sonuc);
             ui.horizontal(|ui| {
                 ui.heading("Bilgi");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
@@ -136,20 +145,42 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
 
                 ui.add_space(8.0);
                 ui.separator();
-                ui.label(egui::RichText::new("Kısayollar").strong());
-                for (tus, aciklama) in KISAYOLLAR {
-                    satir(ui, tus, aciklama);
-                }
+                // Kısayol listesi uzundur: varsayılan kapalı katlanır bölümde tutulur,
+                // böylece panelde bilgi satırları ön planda kalır.
+                egui::CollapsingHeader::new("Kısayollar")
+                    .id_salt("gorsel-kisayollar")
+                    .default_open(false)
+                    .show(ui, |ui| {
+                        for (tus, aciklama) in KISAYOLLAR {
+                            satir(ui, tus, aciklama);
+                        }
+                    });
 
                 ui.add_space(8.0);
-                if ui.button("Paneli gizle (I)").clicked() {
-                    acik = false;
-                }
             });
         });
 
     if !acik {
         durum.ayarlar.bilgi_paneli_acik = false;
+        sonuc.ayar_degisti = true;
+    }
+}
+
+/// Panelin ölçülen genişliğini ayara işler; sürükleme durunca tek kez kaydeder.
+fn genisligi_tazele(ui: &egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
+    let olculen = ui.max_rect().width() + 16.0;
+    let degisti = (olculen - durum.ayarlar.bilgi_paneli_genislik).abs() > 0.5;
+    let anahtar = egui::Id::new(GENISLIK_BELLEGI);
+    if degisti {
+        durum.ayarlar.bilgi_paneli_genislik = olculen.clamp(
+            *BILGI_GENISLIK_ARALIGI.start(),
+            *BILGI_GENISLIK_ARALIGI.end(),
+        );
+        ui.ctx().data_mut(|d| d.insert_temp(anahtar, true));
+        return;
+    }
+    let bekliyor = ui.ctx().data_mut(|d| d.remove_temp::<bool>(anahtar));
+    if bekliyor == Some(true) {
         sonuc.ayar_degisti = true;
     }
 }

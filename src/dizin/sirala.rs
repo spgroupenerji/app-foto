@@ -34,11 +34,6 @@ pub fn yol_karsilastir(a: &Path, b: &Path) -> Ordering {
     }
 }
 
-/// Yol listesini Windows Gezgini sırasına göre yerinde sıralar.
-pub fn yollari_sirala(yollar: &mut [std::path::PathBuf]) {
-    yollar.sort_by(|a, b| yol_karsilastir(a, b));
-}
-
 #[cfg_attr(windows, allow(dead_code))]
 /// Saf Rust doğal sıralama: rakam öbekleri sayısal, diğer karakterler harf olarak
 /// karşılaştırılır. Büyük/küçük harf farkı ikincil önemdedir.
@@ -192,7 +187,7 @@ mod testler {
             PathBuf::from(r"C:\p\resim2.jpg"),
             PathBuf::from(r"C:\p\resim1.jpg"),
         ];
-        yollari_sirala(&mut yollar);
+        yollar.sort_by(|a, b| yol_karsilastir(a, b));
         let adlar: Vec<String> = yollar
             .iter()
             .map(|p| p.file_name().unwrap().to_string_lossy().into_owned())

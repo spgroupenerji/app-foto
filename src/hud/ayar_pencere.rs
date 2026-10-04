@@ -198,6 +198,16 @@ fn arayuz_bolumu(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudS
     {
         sonuc.ayar_degisti = true;
     }
+    if ui
+        .checkbox(&mut ayar.onizlemeler, "Dizin listesinde küçük resimler")
+        .on_hover_text(
+            "Liste satırlarında dosyanın küçük resmi gösterilir; kapatmak \
+             ağ paylaşımlarında taramayı hızlandırır",
+        )
+        .changed()
+    {
+        sonuc.ayar_degisti = true;
+    }
     ui.horizontal_wrapped(|ui| {
         ui.label("Dizin listesi yeri:");
         for (deger, etiket) in [(PanelYeri::Sol, "Sol"), (PanelYeri::Sag, "Sağ")] {

@@ -40,11 +40,72 @@ impl IslenmisGoruntu {
     }
 }
 
+/// Yükleme aşamaları ([`YuklemeIlerleme`] içinde sayısal olarak taşınır).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum YuklemeAsamasi {
+    /// Dosya baytları okunuyor; `promil` okunan oranı taşır.
+    Okuma,
+    /// Okuma bitti, kod çözme çalışıyor (belirsiz süre).
+    Cozme,
+}
+
+/// İşçi ile arayüz arasında paylaşılan yükleme ilerlemesi.
+///
+/// Okuma aşamasında `promil` 0..=1000 arasındadır; çözme aşamasına geçildiğinde
+/// `asama` güncellenir ve arayüz belirsiz (spinner) gösterime geçer.
+#[derive(Debug, Default)]
+pub struct YuklemeIlerleme {
+    /// 0 = okuma, 1 = çözme (kemikleşmiş kilit içi değer).
+    asama: std::sync::atomic::AtomicU8,
+    promil: std::sync::atomic::AtomicU64,
+}
+
+impl YuklemeIlerleme {
+    pub fn yeni() -> Self {
+        Self::default()
+    }
+
+    pub fn asama(&self) -> YuklemeAsamasi {
+        match self.asama.load(std::sync::atomic::Ordering::Acquire) {
+            1 => YuklemeAsamasi::Cozme,
+            _ => YuklemeAsamasi::Okuma,
+        }
+    }
+
+    /// Okunan oran 0,0..=1,0 (yalnızca okuma aşamasında anlamlıdır).
+    pub fn oran(&self) -> f32 {
+        self.promil
+            .load(std::sync::atomic::Ordering::Acquire)
+            .clamp(0, 1000) as f32
+            / 1000.0
+    }
+
+    fn okuma_ilerlet(&self, promil: u64) {
+        self.promil
+            .store(promil.clamp(0, 1000), std::sync::atomic::Ordering::Release);
+    }
+
+    fn cozmeye_gec(&self) {
+        self.asama
+            .store(1, std::sync::atomic::Ordering::Release);
+        self.promil.store(0, std::sync::atomic::Ordering::Release);
+    }
+}
+
 /// Görseli okur, çözer ve GPU'ya hazır hale getirir.
 ///
 /// `hedef` yalnızca SVG rasterleştirmesi için kullanılır; SVG bu ölçüde üretilir.
-pub fn isle(yol: &Path, ayarlar: &Ayarlar, hedef: Option<(u32, u32)>) -> Sonuc<IslenmisGoruntu> {
-    let baytlar = dosya_oku(yol)?;
+/// `ilerleme` verilirse okuma/çözme aşamaları arayüze bildirilir.
+pub fn isle(
+    yol: &Path,
+    ayarlar: &Ayarlar,
+    hedef: Option<(u32, u32)>,
+    ilerleme: Option<&YuklemeIlerleme>,
+) -> Sonuc<IslenmisGoruntu> {
+    let baytlar = dosya_oku_ilerlemeli(yol, ilerleme)?;
+    if let Some(i) = ilerleme {
+        i.cozmeye_gec();
+    }
     let ham = cozucu::coz(yol, &baytlar, hedef)?;
 
     // 1) EXIF yönelimi ham veriye uygulanır.
@@ -138,6 +199,12 @@ pub fn isle(yol: &Path, ayarlar: &Ayarlar, hedef: Option<(u32, u32)>) -> Sonuc<I
 ///
 /// Ağ yollarında bile bellek eşleme kullanılmaz; okuma Win32 sıralı tarama ipucuyla yapılır.
 pub fn dosya_oku(yol: &Path) -> Sonuc<Vec<u8>> {
+    dosya_oku_ilerlemeli(yol, None)
+}
+
+/// [`dosya_oku`] ile aynı işi yapar; `ilerleme` verilirse okunan oranı 0..=1000 promil
+/// olarak bildirir. Parçalı okuma, ağ paylaşımlarında da ilerleme çubuğunun canlı kalmasını sağlar.
+fn dosya_oku_ilerlemeli(yol: &Path, ilerleme: Option<&YuklemeIlerleme>) -> Sonuc<Vec<u8>> {
     use std::io::Read;
     let mut dosya = yol::okuma_icin_ac(yol)?;
     let boyut = dosya
@@ -145,10 +212,108 @@ pub fn dosya_oku(yol: &Path) -> Sonuc<Vec<u8>> {
         .map(|m| m.len())
         .map_err(|k| GorselHatasi::okuma(yol, k))?;
     let mut tampon = Vec::with_capacity(boyut.min(MAX_DOSYA_ON_BELLEK) as usize);
-    dosya
-        .read_to_end(&mut tampon)
-        .map_err(|k| GorselHatasi::okuma(yol, k))?;
+
+    match ilerleme {
+        None => {
+            dosya
+                .read_to_end(&mut tampon)
+                .map_err(|k| GorselHatasi::okuma(yol, k))?;
+        }
+        Some(i) => {
+            // Parçalı okuma: her MB'de bir ilerleme güncellenir (atom yazımı ucuz tutulur).
+            const PARCA: usize = 1024 * 1024;
+            let mut okunan_toplam: u64 = 0;
+            loop {
+                let baslangic = tampon.len();
+                tampon.resize(baslangic + PARCA, 0);
+                match dosya.read(&mut tampon[baslangic..]) {
+                    Ok(0) => {
+                        tampon.truncate(baslangic);
+                        break;
+                    }
+                    Ok(n) => {
+                        tampon.truncate(baslangic + n);
+                        okunan_toplam += n as u64;
+                        let promil = if boyut == 0 {
+                            1000
+                        } else {
+                            okunan_toplam * 1000 / boyut
+                        };
+                        i.okuma_ilerlet(promil);
+                    }
+                    Err(k) if k.kind() == std::io::ErrorKind::Interrupted => continue,
+                    Err(k) => return Err(GorselHatasi::okuma(yol, k)),
+                }
+            }
+        }
+    }
     Ok(tampon)
+}
+
+/// Dizin listesinde gösterilen küçük resim: sRGB RGBA8, en fazla `kenar` piksel.
+#[derive(Debug, Clone)]
+pub struct Onizleme {
+    pub genislik: u32,
+    pub yukseklik: u32,
+    pub rgba: Vec<u8>,
+}
+
+/// Küçük resim üretiminde hedef kenar uzunluğu (ekranda 56 px gösterilir, 2× netlik).
+pub const ONIZLEME_KENAR: u32 = 128;
+
+/// Küçük resim üretir.
+///
+/// `None` dönüşü, kaynağın 8-bit olmayan (HDR/RAW) tampon taşınmasıdır; küçük resim
+/// yerine biçim simgesi gösterilir. EXIF yönelimi küçük resme uygulanır.
+pub fn onizleme_uret(yol: &Path, kenar: u32) -> Sonuc<Option<Onizleme>> {
+    let baytlar = dosya_oku(yol)?;
+    let ham = cozucu::coz(yol, &baytlar, Some((kenar, kenar)))?;
+    let Pikseller::Rgba8(rgba) = ham.veri else {
+        return Ok(None);
+    };
+
+    let (rgba, genislik, yukseklik) = match meta::yonelim_uygula(
+        &rgba,
+        ham.genislik,
+        ham.yukseklik,
+        ham.yonelim,
+    ) {
+        Some((donmus, dg, dy)) => (donmus, dg, dy),
+        None => (rgba, ham.genislik, ham.yukseklik),
+    };
+    let (hedef_g, hedef_y) = kenara_sigdir(genislik, yukseklik, kenar);
+    let rgba = if (hedef_g, hedef_y) != (genislik, yukseklik) {
+        // Küçük resimlerde hız önceliklidir: çift doğrusal filtre yeterlidir.
+        olcekleme::olcekle_rgba8(
+            &rgba,
+            genislik,
+            yukseklik,
+            hedef_g,
+            hedef_y,
+            olcekleme::filtre_secimi(crate::cekirdek::ayar::Filtre::Bilinear),
+        )?
+    } else {
+        rgba
+    };
+    Ok(Some(Onizleme {
+        genislik: hedef_g,
+        yukseklik: hedef_y,
+        rgba,
+    }))
+}
+
+/// Küçük resim ölçüsü: en-boy oranı korunarak en fazla `kenar` piksele sığdırılır.
+fn kenara_sigdir(genislik: u32, yukseklik: u32, kenar: u32) -> (u32, u32) {
+    if genislik == 0 || yukseklik == 0 || kenar == 0 {
+        return (genislik, yukseklik);
+    }
+    let oran = f64::from(kenar) / f64::from(genislik.max(yukseklik));
+    if oran >= 1.0 {
+        return (genislik, yukseklik);
+    }
+    let yeni_g = (f64::from(genislik) * oran).round().max(1.0) as u32;
+    let yeni_y = (f64::from(yukseklik) * oran).round().max(1.0) as u32;
+    (yeni_g, yeni_y)
 }
 
 /// Aşırı büyük dosyalarda ön bellek ayırmayı sınırlayan üst değer (256 MB).
@@ -206,7 +371,7 @@ mod testler {
         let yol = png_yaz(&dizin, "a.png", 20, 10);
 
         let ayar = Ayarlar::default();
-        let islenmis = isle(&yol, &ayar, Some((4000, 3000))).expect("işlenmeli");
+        let islenmis = isle(&yol, &ayar, Some((4000, 3000)), None).expect("işlenmeli");
         assert_eq!((islenmis.genislik, islenmis.yukseklik), (20, 10));
         assert_eq!(islenmis.veri.len(), 20 * 10 * 4, "f16 RGBA tamponu");
         assert!(!islenmis.hdr, "PNG HDR değil");
@@ -224,7 +389,7 @@ mod testler {
         let yol = png_yaz(&dizin, "buyuk.png", 600, 400);
 
         let ayar = Ayarlar::default();
-        let islenmis = isle(&yol, &ayar, Some((100, 100))).expect("işlenmeli");
+        let islenmis = isle(&yol, &ayar, Some((100, 100)), None).expect("işlenmeli");
         assert!(islenmis.meta.kucultuldu, "600x400, hedef 100x100 eşiğini aşar");
         assert!(
             !islenmis.meta.icc_uygulandi,
@@ -248,6 +413,64 @@ mod testler {
     #[test]
     fn olmayan_dosya_hata_dondurur() {
         let ayar = Ayarlar::default();
-        assert!(isle(Path::new(r"C:\yok\boyle\dosya.png"), &ayar, None).is_err());
+        assert!(isle(Path::new(r"C:\yok\boyle\dosya.png"), &ayar, None, None).is_err());
+    }
+
+    #[test]
+    fn yukleme_ilerlemesi_okuma_oranini_tasir() {
+        let i = YuklemeIlerleme::yeni();
+        assert_eq!(i.asama(), YuklemeAsamasi::Okuma);
+        i.okuma_ilerlet(500);
+        assert!((i.oran() - 0.5).abs() < 1e-9);
+        i.okuma_ilerlet(2000);
+        assert!((i.oran() - 1.0).abs() < 1e-9, "promil 1000'de kırpılır");
+        i.cozmeye_gec();
+        assert_eq!(i.asama(), YuklemeAsamasi::Cozme);
+    }
+
+    #[test]
+    fn okuma_ilerlemesi_baslangictan_bite_gider() {
+        let dizin = std::env::temp_dir().join("gorsel-ilerleme-testi");
+        std::fs::create_dir_all(&dizin).expect("dizin");
+        let yol = png_yaz(&dizin, "ilerleme.png", 64, 64);
+
+        let i = YuklemeIlerleme::yeni();
+        let baytlar = dosya_oku_ilerlemeli(&yol, Some(&i)).expect("okunmalı");
+        assert_eq!(i.asama(), YuklemeAsamasi::Okuma);
+        assert!(
+            (i.oran() - 1.0).abs() < 1e-9,
+            "okuma bitince oran 1,0 olmalı, gelen: {}",
+            i.oran()
+        );
+        assert_eq!(baytlar, dosya_oku(&yol).expect("normal okuma"));
+
+        let _ = std::fs::remove_dir_all(&dizin);
+    }
+
+    #[test]
+    fn onizleme_kenara_sigar_ve_yonelim_uygulanir() {
+        let dizin = std::env::temp_dir().join("gorsel-onizleme-testi");
+        std::fs::create_dir_all(&dizin).expect("dizin");
+        let yol = png_yaz(&dizin, "k.png", 320, 160);
+
+        let oniz = onizleme_uret(&yol, 96).expect("üretilmeli").expect("8-bit kaynak");
+        assert_eq!(oniz.genislik, 96);
+        assert_eq!(oniz.yukseklik, 48, "en-boy oranı korunur");
+        assert_eq!(oniz.rgba.len(), (96 * 48 * 4) as usize);
+
+        // Küçük kaynak küçültülmez.
+        let kucuk = png_yaz(&dizin, "ks.png", 40, 20);
+        let oniz = onizleme_uret(&kucuk, 96).expect("üretilmeli").expect("8-bit kaynak");
+        assert_eq!((oniz.genislik, oniz.yukseklik), (40, 20));
+
+        let _ = std::fs::remove_dir_all(&dizin);
+    }
+
+    #[test]
+    fn kenara_sigdirma_orani_korur() {
+        assert_eq!(kenara_sigdir(3200, 1600, 96), (96, 48));
+        assert_eq!(kenara_sigdir(1600, 3200, 96), (48, 96));
+        assert_eq!(kenara_sigdir(40, 20, 96), (40, 20), "küçük kaynak büyütülmez");
+        assert_eq!(kenara_sigdir(0, 100, 96), (0, 100), "sıfır ölçü korlanır");
     }
 }

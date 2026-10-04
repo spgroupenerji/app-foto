@@ -7,7 +7,7 @@ pub mod bolge;
 pub mod fare;
 pub mod klavye;
 
-use crate::cekirdek::ayar::Tema;
+use crate::cekirdek::ayar::{SiralamaTuru, SiralamaYonu, Tema};
 use bolge::Pivot;
 
 /// Kullanıcının tetiklediği soyut eylem.
@@ -53,6 +53,14 @@ pub enum Eylem {
     DosyaListesiDegistir,
     /// Dizin listesi panelini sol/sağ kenar arasında değiştir.
     DosyaListesiYeriDegistir,
+    /// Dizin listesi sıralama anahtarını değiştir (dizin yeniden taranır).
+    SiralaTuru(SiralamaTuru),
+    /// Dizin listesi sıralama önünü değiştir (dizin yeniden taranır).
+    SiralaYonu(SiralamaYonu),
+    /// Dizin listesinde tıklanan görseli harici uygulamada aç (Birlikte Aç kutusu).
+    BirlikteAcSatir(usize),
+    /// Görünür satırın küçük resmini arka planda üretir.
+    OnIzlemeIste(usize),
     /// Arayüz temasını seç (koyu/açık/sistem).
     TemaSec(Tema),
     BaglamMenusu {

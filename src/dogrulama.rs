@@ -404,7 +404,7 @@ fn goruntu_boru_hatti() -> Kontrol {
     }
 
     let ayar = Ayarlar::default();
-    let sonuc = match goruntu::isle(&yol, &ayar, Some((128, 128))) {
+    let sonuc = match goruntu::isle(&yol, &ayar, Some((128, 128)), None) {
         Ok(s) => s,
         Err(k) => return Kontrol::basarisiz("Görüntü boru hattı", k.to_string()),
     };
@@ -457,6 +457,7 @@ fn isci_havuzu() -> Kontrol {
         yol,
         hedef: None,
         on_yukleme: false,
+        ilerleme: None,
     }) {
         return Kontrol::basarisiz("İşçi havuzu", "istek kuyruğa yazılamadı");
     }

@@ -1,10 +1,19 @@
 //! Üst araç çubuğu ve alt durum çubuğu.
+//!
+//! Üst çubuk yalnızca en sık kullanılan işlemleri taşır; kalan her şey çubuğun sonundaki
+//! "Daha fazla" menüsünde hızlı erişim listesi olarak toplanır. Simge düğmeleri font
+//! glifi yerine vektörel çizilir (`ikon`), böylece bozuk glif sorunu yaşanmaz.
 
 use crate::cekirdek::ayar::{PanelYeri, Tema};
 use crate::cekirdek::durum::UygulamaDurumu;
 use crate::girdi::Eylem;
+use crate::goruntu::YuklemeAsamasi;
 
 use super::HudSonucu;
+use super::ikon::{self, Ikon};
+
+/// Yükleme ilerleme çubuğunun genişliği (puan).
+const ILERLEME_GENISLIGI: f32 = 120.0;
 
 /// Araç çubuğu ve durum çubuğunu çizer.
 pub fn ciz(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
@@ -12,7 +21,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
     alt_cubuk(ui, durum);
 }
 
-/// Üst çubuk: gezinme, yakınlaştırma, dosya işlemleri ve görünüm düğmeleri.
+/// Üst çubuk: menü, en sık işlemler ve sağda "Daha fazla" hızlı erişim menüsü.
 fn ust_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
     egui::containers::Panel::top("gorsel-arac-cubugu").show(ui, |ui| {
         ui.horizontal(|ui| {
@@ -40,208 +49,202 @@ fn ust_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
                     }
                 });
                 ui.menu_button("Görünüm", |ui| {
-                    if menu_maddesi(ui, "Sığdır", "S") {
-                        sonuc.ekle(Eylem::Sigdir);
-                    }
-                    if menu_maddesi(ui, "Gerçek boyut", "G") {
-                        sonuc.ekle(Eylem::GercekBoyut);
-                    }
-                    ui.separator();
-                    if menu_maddesi(ui, "Tam ekran", "F11") {
-                        sonuc.ekle(Eylem::TamEkranDegistir);
-                    }
-                    if menu_maddesi(
-                        ui,
-                        if durum.ayarlar.dosya_listesi_acik {
-                            "Dizin listesini gizle"
-                        } else {
-                            "Dizin listesini göster"
-                        },
-                        "L",
-                    ) {
-                        sonuc.ekle(Eylem::DosyaListesiDegistir);
-                    }
-                    if menu_maddesi(
-                        ui,
-                        if durum.ayarlar.dosya_listesi_yeri == PanelYeri::Sol {
-                            "Dizin listesini sağa taşı"
-                        } else {
-                            "Dizin listesini sola taşı"
-                        },
-                        "Liste kenarı",
-                    ) {
-                        sonuc.ekle(Eylem::DosyaListesiYeriDegistir);
-                    }
-                    if menu_maddesi(
-                        ui,
-                        if durum.ayarlar.bilgi_paneli_acik {
-                            "Bilgi panelini gizle"
-                        } else {
-                            "Bilgi panelini göster"
-                        },
-                        "I",
-                    ) {
-                        sonuc.ekle(Eylem::MetaPaneliDegistir);
-                    }
-                    ui.separator();
-                    ui.label(egui::RichText::new("Tema").weak());
-                    for (tema, etiket) in [
-                        (Tema::Koyu, "Koyu"),
-                        (Tema::Acik, "Açık"),
-                        (Tema::Sistem, "Sistem"),
-                    ] {
-                        let secili = durum.ayarlar.tema == tema;
-                        let satir = if secili {
-                            format!("{etiket} ✓")
-                        } else {
-                            etiket.to_string()
-                        };
-                        if menu_maddesi(ui, &satir, "Görünüm teması") {
-                            sonuc.ekle(Eylem::TemaSec(tema));
-                        }
-                    }
-                    ui.separator();
-                    if menu_maddesi(ui, "Ayarlar…", "Ctrl+K") {
-                        sonuc.ekle(Eylem::AyarPenceresi);
-                    }
+                    gorunum_maddeleri(ui, durum, sonuc);
                 });
             });
             ui.separator();
 
-            // En sık kullanılan iki işlem doğrudan araç çubuğunda durur.
-            if duz_dugme(ui, "Aç", "Görsel aç (Ctrl+O)") {
+            // En sık kullanılan işlemler doğrudan çubukta durur.
+            if metin_dugme(ui, "Aç", "Görsel aç (Ctrl+O)") {
                 sonuc.ekle(Eylem::DosyaAc);
             }
-            if duz_dugme(ui, "Klasör", "Klasör aç (Ctrl+Shift+O)") {
+            if metin_dugme(ui, "Klasör", "Klasör aç (Ctrl+Shift+O)") {
                 sonuc.ekle(Eylem::KlasorAc);
             }
             ui.separator();
 
-            if duz_dugme(ui, "◀", "Önceki görsel (Sol ok / PageUp)") {
+            if ikon::ikon_dugme(ui, Ikon::Sol, "Önceki görsel (Sol ok / PageUp)") {
                 sonuc.ekle(Eylem::Onceki);
             }
-            if duz_dugme(ui, "▶", "Sonraki görsel (Sağ ok / PageDown)") {
+            if ikon::ikon_dugme(ui, Ikon::Sag, "Sonraki görsel (Sağ ok / PageDown)") {
                 sonuc.ekle(Eylem::Sonraki);
             }
             ui.separator();
 
+            // Konum ve dosya adı: uzun adlar ortadan kısaltılır, tam ad ipucunda gösterilir.
             ui.label(
                 egui::RichText::new(durum.konum_metni())
                     .strong()
                     .monospace(),
             );
-            ui.separator();
-
-            // Dosya adı: uzun adlar ortadan kısaltılır, tam ad ipucunda gösterilir.
             let ad = durum.dosya_adi();
             ui.label(egui::RichText::new(kisalt(&ad, 48)).strong())
                 .on_hover_text(&ad);
             ui.separator();
 
-            if duz_dugme(ui, "−", "Uzaklaştır (Ctrl + -)") {
+            if ikon::ikon_dugme(ui, Ikon::Eksi, "Uzaklaştır (Ctrl + -)") {
                 sonuc.ekle(Eylem::Yakinlastir {
                     carpan: 1.0 / crate::girdi::klavye::TUS_ZOOM_CARPI,
                     pivot: None,
                 });
             }
             ui.label(egui::RichText::new(durum.zoom_metni()).monospace().strong());
-            if duz_dugme(ui, "+", "Yakınlaştır (Ctrl + +)") {
+            if ikon::ikon_dugme(ui, Ikon::Arti, "Yakınlaştır (Ctrl + +)") {
                 sonuc.ekle(Eylem::Yakinlastir {
                     carpan: crate::girdi::klavye::TUS_ZOOM_CARPI,
                     pivot: None,
                 });
             }
-            if duz_dugme(ui, "Sığdır", "Görseli pencereye sığdır (S)") {
-                sonuc.ekle(Eylem::Sigdir);
-            }
-            if duz_dugme(ui, "%100", "Gerçek boyut (G)") {
-                sonuc.ekle(Eylem::GercekBoyut);
-            }
             ui.separator();
 
-            // Paneller ve tema: sık kullanılan görünüm anahtarları.
-            if duz_dugme(ui, "☰", "Dizin listesini göster/gizle (L)") {
-                sonuc.ekle(Eylem::DosyaListesiDegistir);
-            }
-            if duz_dugme(ui, "ℹ", "Bilgi panelini göster/gizle (I)") {
-                sonuc.ekle(Eylem::MetaPaneliDegistir);
-            }
-            let tema_hedefi = if durum.ayarlar.tema == Tema::Acik {
-                Tema::Koyu
-            } else {
-                Tema::Acik
-            };
-            let tema_etiketi = if tema_hedefi == Tema::Koyu {
-                "🌙"
-            } else {
-                "☀"
-            };
-            if duz_dugme(ui, tema_etiketi, "Koyu/açık tema değiştir") {
-                sonuc.ekle(Eylem::TemaSec(tema_hedefi));
-            }
-            ui.separator();
-
-            if duz_dugme(ui, "⟳", "Yeniden yükle (R)") {
-                sonuc.ekle(Eylem::YenidenYukle);
-            }
-            if duz_dugme(ui, "Birlikte aç", "Harici uygulamada aç (Ctrl+E)") {
-                sonuc.ekle(Eylem::BirlikteAc);
-            }
-            if duz_dugme(
-                ui,
-                if durum.tam_ekran {
-                    "Pencere"
-                } else {
-                    "Tam ekran"
-                },
-                "Tam ekran (F11 / F / çift tık)",
-            ) {
-                sonuc.ekle(Eylem::TamEkranDegistir);
-            }
-            if duz_dugme(ui, "Ayarlar", "Ayarlar penceresi (Ctrl + K)") {
-                sonuc.ekle(Eylem::AyarPenceresi);
-            }
-
-            // Sağa yaslanan rozetler.
+            // Sağa yaslanan bölüm: yükleme göstergesi, rozetler ve "Daha fazla" menüsü.
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                if durum.hdr_yuzey {
-                    rozet(ui, "HDR", egui::Color32::from_rgb(120, 200, 140));
-                }
-                if durum.hdr_kaynak {
-                    rozet(ui, "HDR kaynak", egui::Color32::from_rgb(150, 180, 240));
-                }
-                if durum.icc_var() {
-                    rozet(ui, "ICC", egui::Color32::from_rgb(220, 190, 120));
-                }
-                if durum.yukleniyor.is_some() {
-                    ui.spinner();
-                }
+                daha_fazla_menusu(ui, durum, sonuc);
+                rozetleri_ciz(ui, durum);
+                yukleme_gostergesi(ui, durum);
             });
         });
     });
 }
 
-/// Alt çubuk: dosya ve görüntü bilgileri ile performans göstergesi.
+/// Görünüm menüsünün (ve "Daha fazla" menüsünün) ortak maddeleri.
+fn gorunum_maddeleri(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
+    if menu_maddesi(ui, "Sığdır", "S") {
+        sonuc.ekle(Eylem::Sigdir);
+    }
+    if menu_maddesi(ui, "Gerçek boyut", "G") {
+        sonuc.ekle(Eylem::GercekBoyut);
+    }
+    ui.separator();
+    if menu_maddesi(ui, "Tam ekran", "F11") {
+        sonuc.ekle(Eylem::TamEkranDegistir);
+    }
+    if menu_maddesi(
+        ui,
+        if durum.ayarlar.dosya_listesi_acik {
+            "Dizin listesini gizle"
+        } else {
+            "Dizin listesini göster"
+        },
+        "L",
+    ) {
+        sonuc.ekle(Eylem::DosyaListesiDegistir);
+    }
+    if menu_maddesi(
+        ui,
+        if durum.ayarlar.dosya_listesi_yeri == PanelYeri::Sol {
+            "Dizin listesini sağa taşı"
+        } else {
+            "Dizin listesini sola taşı"
+        },
+        "Liste kenarı",
+    ) {
+        sonuc.ekle(Eylem::DosyaListesiYeriDegistir);
+    }
+    if menu_maddesi(
+        ui,
+        if durum.ayarlar.bilgi_paneli_acik {
+            "Bilgi panelini gizle"
+        } else {
+            "Bilgi panelini göster"
+        },
+        "I",
+    ) {
+        sonuc.ekle(Eylem::MetaPaneliDegistir);
+    }
+    ui.separator();
+    ui.label(egui::RichText::new("Tema").weak());
+    for (tema, etiket) in [
+        (Tema::Koyu, "Koyu"),
+        (Tema::Acik, "Açık"),
+        (Tema::Sistem, "Sistem"),
+    ] {
+        let secili = durum.ayarlar.tema == tema;
+        let satir = if secili {
+            format!("{etiket} ✓")
+        } else {
+            etiket.to_string()
+        };
+        if menu_maddesi(ui, &satir, "Görünüm teması") {
+            sonuc.ekle(Eylem::TemaSec(tema));
+        }
+    }
+    ui.separator();
+    if menu_maddesi(ui, "Ayarlar…", "Ctrl+K") {
+        sonuc.ekle(Eylem::AyarPenceresi);
+    }
+}
+
+/// Çubuğun sonundaki hızlı erişim menüsü: seyrek işlemler tek menüde toplanır.
+fn daha_fazla_menusu(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
+    let yanit = ikon::ikon_dugme_yanit(
+        ui,
+        Ikon::UcNokta,
+        false,
+        "Daha fazla: tüm görünüm ve dosya işlemleri",
+    );
+    egui::Popup::menu(&yanit).show(|ui| {
+        gorunum_maddeleri(ui, durum, sonuc);
+    });
+}
+
+/// HDR/ICC rozetlerini çizer (sağdan sola akışta menünün solunda durur).
+fn rozetleri_ciz(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
+    if durum.hdr_yuzey {
+        rozet(ui, "HDR", egui::Color32::from_rgb(120, 200, 140));
+    }
+    if durum.hdr_kaynak {
+        rozet(ui, "HDR kaynak", egui::Color32::from_rgb(150, 180, 240));
+    }
+    if durum.icc_var() {
+        rozet(ui, "ICC", egui::Color32::from_rgb(220, 190, 120));
+    }
+}
+
+/// Yükleme göstergesi: okuma aşamasında % çubuğu, çözme aşamasında süreli spinner.
+fn yukleme_gostergesi(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
+    let Some(gosterge) = &durum.yukleme else {
+        return;
+    };
+    match gosterge.asama {
+        YuklemeAsamasi::Okuma => {
+            let cubuk = egui::ProgressBar::new(gosterge.oran.clamp(0.0, 1.0))
+                .desired_width(ILERLEME_GENISLIGI)
+                .show_percentage();
+            ui.add(cubuk).on_hover_text("Görsel dosyası okunuyor");
+        }
+        YuklemeAsamasi::Cozme => {
+            ui.spinner().on_hover_text("Görsel çözümleniyor");
+            ui.label(
+                egui::RichText::new(format!("{:.1} sn", gosterge.gecen_sn))
+                    .monospace()
+                    .weak(),
+            )
+            .on_hover_text("Kod çözme sürüyor; büyük dosyalar ağda daha uzun sürebilir");
+        }
+    }
+}
+
+/// Alt çubuk: tek satırda dosya özeti ile performans göstergesi.
 fn alt_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
     egui::containers::Panel::bottom("gorsel-durum-cubugu").show(ui, |ui| {
         ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 10.0;
             match &durum.aktif {
                 Some(meta) => {
-                    ui.label(
-                        egui::RichText::new(crate::goruntu::bicim::bicim_adi(meta.bicim)).strong(),
+                    // Tek satır özet: ayrıntılar bilgi panelinde kalır.
+                    let ozet = format!(
+                        "{} · {} · {}",
+                        crate::goruntu::bicim::bicim_adi(meta.bicim),
+                        meta.cozunurluk_metni(),
+                        meta.boyut_metni()
                     );
-                    ui.label(meta.cozunurluk_metni());
-                    ui.label(meta.megapiksel_metni());
-                    ui.label(meta.boyut_metni());
+                    ui.label(egui::RichText::new(ozet).strong());
                     if meta.yonelim > 1 {
                         ui.label(format!(
                             "⟲ {}",
                             crate::goruntu::meta::yonelim_adi(meta.yonelim)
                         ));
-                    }
-                    if meta.ham_genislik != meta.genislik {
-                        ui.label(format!("ham {}×{}", meta.ham_genislik, meta.ham_yukseklik));
                     }
                 }
                 None => {
@@ -281,7 +284,7 @@ fn menu_maddesi(ui: &mut egui::Ui, etiket: &str, ipucu: &str) -> bool {
 }
 
 /// Simgesiz, kenarlıksız düğme; en az 44×44 dokunmatik hedef taşır.
-fn duz_dugme(ui: &mut egui::Ui, etiket: &str, ipucu: &str) -> bool {
+fn metin_dugme(ui: &mut egui::Ui, etiket: &str, ipucu: &str) -> bool {
     ui.add(
         egui::Button::new(etiket)
             .frame(false)

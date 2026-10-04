@@ -1,35 +1,108 @@
-//! Dizin taraması: desteklenen görseller bulunur ve Windows Gezgini sırasına dizilir.
+//! Dizin taraması: desteklenen görseller bulunur ve seçilen sıralamaya dizilir.
 //!
 //! Tarama, `std::fs::read_dir` üzerinden tek geçişte yapılır; uzantı filtresi
 //! `goruntu::bicim::uzanti_desteklenir` ile aynı kaynaktan beslenir, böylece çözücü
-//! matrisi ile dizin listesi hiçbir zaman ayrışmaz.
+//! matrisi ile dizin listesi hiçbir zaman ayrışmaz. Her dosya için boyut ve değişim
+//! zamanı da toplanır; bunlar sıralama ve listede küçük bilgi metni için kullanılır.
 
+use std::cmp::Ordering;
 use std::path::{Path, PathBuf};
 
 use super::sirala;
+use crate::cekirdek::ayar::{SiralamaTuru, SiralamaYonu};
 use crate::cekirdek::hata::{GorselHatasi, Sonuc};
 use crate::goruntu::bicim::uzanti_desteklenir;
 
 /// Atlanan dosya adları: sistem tarafından üretilen küçük resim/ayar dosyaları.
 const ATLANAN_ADLAR: [&str; 2] = ["desktop.ini", "thumbs.db"];
 
-/// Dizindeki desteklenen görselleri Windows doğal sıralamasında döndürür.
+/// Listedeki tek bir görselin bilgisi: yol, boyut ve son değişim zamanı (UNIX ms).
+///
+/// Boyut/zaman okunamazsa 0 döner; gösterim ve sıralama bozulmaz.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DosyaBilgi {
+    pub yol: PathBuf,
+    pub boyut: u64,
+    pub tarih_ms: u64,
+}
+
+impl DosyaBilgi {
+    pub fn yol_damgasi(yol: &Path) -> Self {
+        let (boyut, tarih_ms) = crate::gio::okuyucu::dosya_damgasi(yol).unwrap_or((0, 0));
+        Self {
+            yol: yol.to_path_buf(),
+            boyut,
+            tarih_ms,
+        }
+    }
+
+    fn ad(&self) -> String {
+        self.yol
+            .file_name()
+            .map(|s| s.to_string_lossy().into_owned())
+            .unwrap_or_default()
+    }
+
+    fn uzanti(&self) -> String {
+        self.yol
+            .extension()
+            .map(|e| e.to_string_lossy().to_lowercase())
+            .unwrap_or_default()
+    }
+}
+
+/// Dizindeki desteklenen görselleri toplar; sıralama çağıranın sorumluluğundadır.
 ///
 /// Okunamayan tek bir dosya listeyi bozmaz; yalnızca gizli ve sistem dosyaları atlanır.
-pub fn tara(dizin: &Path) -> Sonuc<Vec<PathBuf>> {
+pub fn tara(dizin: &Path) -> Sonuc<Vec<DosyaBilgi>> {
     let okunus = std::fs::read_dir(dizin).map_err(|k| GorselHatasi::okuma(dizin, k))?;
-    let mut dosyalar: Vec<PathBuf> = Vec::new();
+    let mut dosyalar: Vec<DosyaBilgi> = Vec::new();
 
     for girdi in okunus.flatten() {
         let yol = girdi.path();
         if !gorsel_adayi_mi(&yol) {
             continue;
         }
-        dosyalar.push(yol);
+        dosyalar.push(DosyaBilgi::yol_damgasi(&yol));
     }
 
-    sirala::yollari_sirala(&mut dosyalar);
     Ok(dosyalar)
+}
+
+/// Taranan bilgileri seçilen sıralamaya dizer.
+pub fn bilgileri_sirala(
+    bilgiler: &mut [DosyaBilgi],
+    tur: SiralamaTuru,
+    yon: SiralamaYonu,
+    dogal_ad: bool,
+) {
+    bilgiler.sort_by(|a, b| {
+        let ana = match tur {
+            SiralamaTuru::Ad => ad_karsilastir(a, b, dogal_ad),
+            SiralamaTuru::Tur => a.uzanti().cmp(&b.uzanti()).then(ad_karsilastir(a, b, dogal_ad)),
+            SiralamaTuru::Tarih => a.tarih_ms.cmp(&b.tarih_ms).then(ad_karsilastir(a, b, dogal_ad)),
+            SiralamaTuru::Boyut => a.boyut.cmp(&b.boyut).then(ad_karsilastir(a, b, dogal_ad)),
+        };
+        // Ön yalnızca ana anahtara uygulanır: eşitlik bozmada adlar her zaman artan kalır
+        // (Windows Gezgini davranışı; "azalan tarih" listesinde adlar A→Z akar).
+        let ana = match yon {
+            SiralamaYonu::Artan => ana,
+            SiralamaYonu::Azalan => ana.reverse(),
+        };
+        if ana == Ordering::Equal {
+            ad_karsilastir(a, b, dogal_ad)
+        } else {
+            ana
+        }
+    });
+}
+
+fn ad_karsilastir(a: &DosyaBilgi, b: &DosyaBilgi, dogal: bool) -> Ordering {
+    if dogal {
+        sirala::yol_karsilastir(&a.yol, &b.yol)
+    } else {
+        a.ad().cmp(&b.ad())
+    }
 }
 
 /// Bir yolun listeye alınıp alınmayacağına karar verir.
@@ -104,10 +177,11 @@ mod testler {
         d.dosya("uzantisiz");
 
         let liste = tara(&d.yol).expect("taranmalı");
-        let adlar: Vec<String> = liste
+        let mut adlar: Vec<String> = liste
             .iter()
-            .map(|y| y.file_name().unwrap().to_string_lossy().into_owned())
+            .map(|b| b.yol.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
+        adlar.sort();
         assert_eq!(adlar, vec!["resim1.jpg", "resim2.PNG"]);
     }
 
@@ -117,12 +191,64 @@ mod testler {
         for ad in ["resim10.jpg", "resim2.jpg", "resim1.jpg"] {
             d.dosya(ad);
         }
-        let liste = tara(&d.yol).expect("taranmalı");
+        let mut liste = tara(&d.yol).expect("taranmalı");
+        bilgileri_sirala(&mut liste, SiralamaTuru::Ad, SiralamaYonu::Artan, true);
         let adlar: Vec<String> = liste
             .iter()
-            .map(|y| y.file_name().unwrap().to_string_lossy().into_owned())
+            .map(|b| b.yol.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         assert_eq!(adlar, vec!["resim1.jpg", "resim2.jpg", "resim10.jpg"]);
+    }
+
+    #[test]
+    fn ada_gore_azalan_siralama_tersine_cevirir() {
+        let d = GeciciDizin::yeni("azalan");
+        for ad in ["a.jpg", "b.jpg", "c.jpg"] {
+            d.dosya(ad);
+        }
+        let mut liste = tara(&d.yol).expect("taranmalı");
+        bilgileri_sirala(&mut liste, SiralamaTuru::Ad, SiralamaYonu::Azalan, true);
+        let adlar: Vec<String> = liste
+            .iter()
+            .map(|b| b.yol.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(adlar, vec!["c.jpg", "b.jpg", "a.jpg"]);
+    }
+
+    #[test]
+    fn ture_gore_siralama_uzantida_birlesir() {
+        let d = GeciciDizin::yeni("tur");
+        for ad in ["iki.png", "bir.jpg", "uc.png"] {
+            d.dosya(ad);
+        }
+        let mut liste = tara(&d.yol).expect("taranmalı");
+        bilgileri_sirala(&mut liste, SiralamaTuru::Tur, SiralamaYonu::Artan, true);
+        let adlar: Vec<String> = liste
+            .iter()
+            .map(|b| b.yol.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(adlar, vec!["bir.jpg", "iki.png", "uc.png"]);
+    }
+
+    #[test]
+    fn boyut_ve_tarihe_gore_siralama_bilgi_damgasini_kullanir() {
+        let d = GeciciDizin::yeni("boyut-tarih");
+        let kucuk = d.dosya("kucuk.jpg");
+        std::fs::write(&kucuk, b"ab").expect("yazılmalı");
+        // NTFS değişim zamanı 10 ms tiktir; farklı zamanlar üretmek için bekle.
+        std::thread::sleep(std::time::Duration::from_millis(50));
+        let buyuk = d.dosya("buyuk.jpg");
+        std::fs::write(&buyuk, vec![0u8; 2048]).expect("yazılmalı");
+
+        let mut liste = tara(&d.yol).expect("taranmalı");
+        bilgileri_sirala(&mut liste, SiralamaTuru::Boyut, SiralamaYonu::Artan, true);
+        assert_eq!(liste[0].yol, kucuk);
+        assert_eq!(liste[1].boyut, 2048);
+        assert!(liste.iter().all(|b| b.tarih_ms > 0), "değişim zamanı okunmalı");
+
+        bilgileri_sirala(&mut liste, SiralamaTuru::Tarih, SiralamaYonu::Azalan, true);
+        // En son yazılan buyuk.jpg en yeni olmalı (aynı saniyede yazılsa da ms çözünürlük korunur).
+        assert_eq!(liste[0].yol, buyuk);
     }
 
     #[test]

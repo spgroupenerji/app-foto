@@ -59,6 +59,30 @@ impl OnYuklemeGenisligi {
     }
 }
 
+/// Dizin listesi sıralama anahtarı.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SiralamaTuru {
+    /// Dosya adına göre (doğal sıralama açıkken Gezgini ile aynı).
+    #[default]
+    Ad,
+    /// Uzantıya (biçime) göre.
+    Tur,
+    /// Son değişim zamanına göre.
+    Tarih,
+    /// Dosya boyutuna göre.
+    Boyut,
+}
+
+/// Sıralama önü (artan/azalan).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SiralamaYonu {
+    #[default]
+    Artan,
+    Azalan,
+}
+
 /// Kullanıcı ayarları. `%APPDATA%\Gorsel\ayarlar.json` altında saklanır.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
@@ -72,6 +96,11 @@ pub struct Ayarlar {
     pub hdr_etkin: bool,
     /// Windows Gezgini ile aynı doğal sıralama (StrCmpLogicalW).
     pub dogal_siralama: bool,
+    /// Dizin listesi sıralama anahtarı ve önü.
+    pub siralama_turu: SiralamaTuru,
+    pub siralama_yonu: SiralamaYonu,
+    /// Dizin listesinde dosya başına küçük resim üret.
+    pub onizlemeler: bool,
     /// Fare tekerleği başına zoom çarpanı.
     pub tekerlek_zoom_carpani: f32,
     /// Yeni görsel açıldığında varsayılan yakınlaştırma kipi.
@@ -92,6 +121,10 @@ pub struct Ayarlar {
     pub dosya_listesi_acik: bool,
     /// Dizin listesi panelinin ekran kenarı.
     pub dosya_listesi_yeri: PanelYeri,
+    /// Dizin listesi panelinin kullanıcı genişliği (puan).
+    pub dosya_listesi_genislik: f32,
+    /// Bilgi panelinin kullanıcı genişliği (puan).
+    pub bilgi_paneli_genislik: f32,
 }
 
 /// Yeni görsel açılışında uygulanacak yakınlaştırma kipi.
@@ -132,6 +165,9 @@ impl Default for Ayarlar {
             ram_onbellek_mb: 512,
             hdr_etkin: true,
             dogal_siralama: true,
+            siralama_turu: SiralamaTuru::default(),
+            siralama_yonu: SiralamaYonu::default(),
+            onizlemeler: true,
             tekerlek_zoom_carpani: 1.15,
             varsayilan_zoom: VarsayilanZoom::default(),
             arka_plan: [22, 22, 26],
@@ -142,9 +178,15 @@ impl Default for Ayarlar {
             bilgi_paneli_acik: false,
             dosya_listesi_acik: true,
             dosya_listesi_yeri: PanelYeri::default(),
+            dosya_listesi_genislik: 260.0,
+            bilgi_paneli_genislik: 300.0,
         }
     }
 }
+
+/// Panel genişliklerinin izin verilen aralıkları (puan).
+pub const LISTE_GENISLIK_ARALIGI: std::ops::RangeInclusive<f32> = 160.0..=560.0;
+pub const BILGI_GENISLIK_ARALIGI: std::ops::RangeInclusive<f32> = 200.0..=640.0;
 
 impl Ayarlar {
     pub const DOSYA_ADI: &'static str = "ayarlar.json";
@@ -206,6 +248,12 @@ mod testler {
         assert!(!ayar.bilgi_paneli_acik);
         assert!(ayar.dosya_listesi_acik);
         assert_eq!(ayar.dosya_listesi_yeri, PanelYeri::Sol);
+        // Küçük resimler açık, sıralama ada göre artan.
+        assert!(ayar.onizlemeler);
+        assert_eq!(ayar.siralama_turu, SiralamaTuru::Ad);
+        assert_eq!(ayar.siralama_yonu, SiralamaYonu::Artan);
+        assert!(LISTE_GENISLIK_ARALIGI.contains(&ayar.dosya_listesi_genislik));
+        assert!(BILGI_GENISLIK_ARALIGI.contains(&ayar.bilgi_paneli_genislik));
     }
 
     #[test]
@@ -222,6 +270,11 @@ mod testler {
         ayar.tema = Tema::Sistem;
         ayar.bilgi_paneli_acik = true;
         ayar.dosya_listesi_yeri = PanelYeri::Sag;
+        ayar.siralama_turu = SiralamaTuru::Tarih;
+        ayar.siralama_yonu = SiralamaYonu::Azalan;
+        ayar.onizlemeler = false;
+        ayar.dosya_listesi_genislik = 380.0;
+        ayar.bilgi_paneli_genislik = 420.0;
         ayar.kaydet_dosyaya(&yol).expect("kaydedilmeli");
 
         let geri = Ayarlar::yukle_dosyadan(&yol).expect("yüklenmeli");
@@ -231,6 +284,11 @@ mod testler {
         assert_eq!(geri.tema, Tema::Sistem);
         assert!(geri.bilgi_paneli_acik);
         assert_eq!(geri.dosya_listesi_yeri, PanelYeri::Sag);
+        assert_eq!(geri.siralama_turu, SiralamaTuru::Tarih);
+        assert_eq!(geri.siralama_yonu, SiralamaYonu::Azalan);
+        assert!(!geri.onizlemeler);
+        assert_eq!(geri.dosya_listesi_genislik, 380.0);
+        assert_eq!(geri.bilgi_paneli_genislik, 420.0);
 
         let _ = std::fs::remove_dir_all(&dizin);
     }

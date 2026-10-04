@@ -6,6 +6,7 @@ pub mod ayar_pencere;
 pub mod baglam_menu;
 pub mod bildirim;
 pub mod dosya_listesi;
+pub mod ikon;
 pub mod meta_panel;
 
 use crate::cekirdek::ayar::Tema;

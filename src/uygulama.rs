@@ -13,7 +13,7 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window, WindowAttributes, WindowId};
 
 use crate::cekirdek::ayar::{Ayarlar, PanelYeri, Tema};
-use crate::cekirdek::durum::UygulamaDurumu;
+use crate::cekirdek::durum::{OnizlemeDugumu, UygulamaDurumu};
 use crate::dizin::izleyici::{DizinIzleyici, DizinOlayi};
 use crate::gio::isci::{IsciHavuzu, Istek, Yanit};
 use crate::gio::onbellek::Onbellek;
@@ -21,7 +21,7 @@ use crate::gio::oneyukleme::{self, Yon};
 use crate::gio::veritabani::{MetaKayit, MetaVeritabani};
 use crate::girdi::bolge::{self, Pivot};
 use crate::girdi::{Eylem, fare, klavye};
-use crate::goruntu::IslenmisGoruntu;
+use crate::goruntu::{IslenmisGoruntu, YuklemeIlerleme};
 use crate::gpu::Gpu;
 use crate::gpu::boru::uniform_olustur;
 use crate::gpu::cizim::{Cizim, EguiKare};
@@ -88,6 +88,10 @@ pub struct Uygulama {
     son_tik: Option<Instant>,
     son_yon: Yon,
     kirli: bool,
+    /// Aktif görselin yükleme ilerleme sayacı; yükleme bitince bırakılır.
+    aktif_ilerleme: Option<Arc<YuklemeIlerleme>>,
+    /// Aktif yükleme isteğinin başlangıcı (geçen süre göstergesi için).
+    yukleme_basladi: Option<Instant>,
 }
 
 impl Uygulama {
@@ -127,6 +131,8 @@ impl Uygulama {
             son_tik: None,
             son_yon: Yon::Yok,
             kirli: true,
+            aktif_ilerleme: None,
+            yukleme_basladi: None,
         }
     }
 
@@ -268,12 +274,15 @@ impl Uygulama {
         self.tarama_iste(dizin, self.baslangic_yolu.clone());
     }
 
-    /// Klasör tarama isteğini kuyruğa yazar.
+    /// Klasör tarama isteğini kuyruğa yazar; güncel sıralama ayarı ile gönderilir.
     fn tarama_iste(&self, dizin: PathBuf, odak: Option<PathBuf>) {
         self.isci.gonder(Istek::Tara {
             nesil: self.durum.nesil,
             dizin,
             odak,
+            siralama: self.ayarlar.siralama_turu,
+            siralama_yonu: self.ayarlar.siralama_yonu,
+            dogal_ad: self.ayarlar.dogal_siralama,
         });
     }
 
@@ -282,15 +291,20 @@ impl Uygulama {
         self.son_dizin = dosyanin_dizini(&yol);
         self.baslangic_yolu = Some(yol);
         self.baslik_guncelle();
+        // Yeni dizin: eski dizinin küçük resimleri bellekte tutulmaz.
+        self.durum.onizlemeler.clear();
+        self.durum.onizleme_sirasi.clear();
         self.dizini_yukle();
         self.kirli = true;
     }
 
-    /// Bir klasörü açar: içindeki görseller doğal sırada listelenir ve ilki gösterilir.
+    /// Bir klasörü açar: içindeki görseller seçilen sıralamada listelenir ve ilki gösterilir.
     pub fn klasoru_ac(&mut self, dizin: PathBuf) {
         self.baslangic_yolu = None;
         self.son_dizin = Some(dizin);
         self.baslik_guncelle();
+        self.durum.onizlemeler.clear();
+        self.durum.onizleme_sirasi.clear();
         self.dizini_yukle();
         self.kirli = true;
     }
@@ -316,6 +330,9 @@ impl Uygulama {
     }
 
     /// Aktif görselin çözülmesini ister; önbellekte varsa doğrudan kullanır.
+    ///
+    /// İstek öncelik kuyruğuna yazılır: ön yükleme işleriyle bile beklemez, ekranda
+    /// beklenen görsel hemen çözülmeye başlar. Okuma ilerlemesi % göstergesine taşınır.
     fn cozme_iste(&mut self) {
         let Some(yol) = self.aktif_yol() else {
             return;
@@ -326,15 +343,23 @@ impl Uygulama {
             return;
         }
         self.durum.yukleniyor = Some(self.durum.konum);
+        self.durum.yukleme = None;
+        let ilerleme = Arc::new(YuklemeIlerleme::yeni());
+        self.aktif_ilerleme = Some(Arc::clone(&ilerleme));
+        self.yukleme_basladi = Some(Instant::now());
         let hedef = Some(self.pencere_olcusu());
-        if !self.isci.gonder(Istek::Coz {
+        if !self.isci.gonder_oncelikli(Istek::Coz {
             nesil: self.durum.nesil,
             sira: self.durum.konum,
             yol,
             hedef,
             on_yukleme: false,
+            ilerleme: Some(ilerleme),
         }) {
             self.durum.yukleniyor = None;
+            self.durum.yukleme = None;
+            self.aktif_ilerleme = None;
+            self.yukleme_basladi = None;
             self.durum
                 .hata_ver(&crate::cekirdek::hata::GorselHatasi::Gio(
                     "arka plan işçisi kullanılamıyor".into(),
@@ -414,6 +439,12 @@ impl Uygulama {
                                     ),
                                 );
                             }
+                            self.yeni_gorselleri_bildir(&liste);
+                            if let Some(en_yeni) =
+                                liste.iter().max_by_key(|b| b.tarih_ms).map(|b| b.yol.clone())
+                            {
+                                self.durum.en_yeni_yol = Some(en_yeni);
+                            }
                             self.durum.indeksi_kur(liste, odak.as_deref());
                             if let Some(dizin) = self.son_dizin.clone() {
                                 self.izleyiciyi_kur(&dizin);
@@ -437,6 +468,9 @@ impl Uygulama {
                             let yol = g.meta.yol.clone();
                             let aktif_mi = !on_yukleme && sira == self.durum.konum;
                             if aktif_mi {
+                                self.aktif_ilerleme = None;
+                                self.yukleme_basladi = None;
+                                self.durum.yukleme = None;
                                 self.goruntuyu_uygula(&g, false);
                             }
                             self.meta_kaydet(&g);
@@ -446,16 +480,66 @@ impl Uygulama {
                             if on_yukleme {
                                 log::debug!("ön yükleme başarısız: {k}");
                             } else {
+                                self.aktif_ilerleme = None;
+                                self.yukleme_basladi = None;
+                                self.durum.yukleme = None;
                                 self.durum.yukleniyor = None;
                                 self.durum.hata_ver(&k);
                             }
                         }
                     }
                 }
+                Yanit::Onizlendi {
+                    nesil,
+                    yol,
+                    sonuc,
+                    ..
+                } => {
+                    if nesil != self.durum.nesil {
+                        continue;
+                    }
+                    let Some(dugum) = self.durum.onizlemeler.get_mut(&yol) else {
+                        continue;
+                    };
+                    dugum.istendi = false;
+                    if let Ok(Some(o)) = sonuc {
+                        dugum.piksel = Some((o.rgba, o.genislik, o.yukseklik));
+                    }
+                    // Üretilemeyen biçimlerde (HDR/RAW) piksel yok kalır: kalıcı yer tutucu.
+                }
             }
         }
         self.onbellek
             .suz_ve_tahliye(|yol| zaten_tutulacak.contains(yol));
+    }
+
+    /// Yeniden taramada listeye yeni eklenen görselleri kullanıcıya bildirir.
+    ///
+    /// İlk taramada (liste boşken) bildirim verilmez; yalnızca izleyicinin yakaladığı
+    /// sonradan eklenen dosyalar haber verilir.
+    fn yeni_gorselleri_bildir(&mut self, liste: &[crate::dizin::tarayici::DosyaBilgi]) {
+        if self.durum.indeks.is_empty() {
+            return;
+        }
+        let eski: std::collections::HashSet<PathBuf> =
+            self.durum.indeks.iter().cloned().collect();
+        let yeni: Vec<&crate::dizin::tarayici::DosyaBilgi> =
+            liste.iter().filter(|b| !eski.contains(&b.yol)).collect();
+        if yeni.is_empty() {
+            return;
+        }
+        let son = yeni.last().map(|b| {
+            b.yol
+                .file_name()
+                .map(|a| a.to_string_lossy().into_owned())
+                .unwrap_or_default()
+        });
+        let metin = match (yeni.len(), son) {
+            (1, Some(ad)) => format!("Dizine yeni görsel eklendi: {ad}"),
+            (n, Some(ad)) => format!("Dizine {n} yeni görsel eklendi (son: {ad})"),
+            _ => return,
+        };
+        self.durum.bilgi_ver(metin);
     }
 
     /// Dizin izleyiciyi kurar; ayar kapalıysa veya kurulum başarısızsa sessizce devam eder.
@@ -500,13 +584,21 @@ impl Uygulama {
         }
     }
 
-    /// Açık dizini, aktif görsel odağını koruyarak yeniden tarar.
+    /// Açık dizini, bakılan görsel odağını koruyarak yeniden tarar.
+    ///
+    /// Sıralama değişimi ve izleyici olayları buradan geçer; odağın bakılan dosyada
+    /// kalması sayesinde kullanıcı sıralama değiştirdiğinde yerinde kalır.
     fn dizini_yeniden_tara(&mut self) {
         let Some(dizin) = self.son_dizin.clone() else {
             return;
         };
+        let odak = self
+            .durum
+            .aktif_yol()
+            .map(|p| p.to_path_buf())
+            .or_else(|| self.baslangic_yolu.clone());
         self.nesli_arttir();
-        self.tarama_iste(dizin, self.baslangic_yolu.clone());
+        self.tarama_iste(dizin, odak);
     }
 
     /// Çözülen görselin meta verisini yerel veritabanına yazar (hata uygulamayı durdurmaz).
@@ -573,7 +665,35 @@ impl Uygulama {
                 yol,
                 hedef,
                 on_yukleme: true,
+                ilerleme: None,
             });
+        }
+    }
+
+    /// Görünür satırın küçük resmini ister; tekrar istekleri tekilleştirilir.
+    ///
+    /// Ayar kapalıysa istek gönderilmez; daha önce istenmiş ya da üretilmiş dosyalar
+    /// (eşlemede kaydı olanlar) tekrar istenmez. Küçük resim normal kuyruğu kullanır:
+    /// aktif görsel yüklemesini asla geciktirmez.
+    fn onizleme_iste(&mut self, sira: usize) {
+        if !self.ayarlar.onizlemeler {
+            return;
+        }
+        let Some(yol) = self.durum.indeks.get(sira).cloned() else {
+            return;
+        };
+        if self.durum.onizlemeler.contains_key(&yol) {
+            return;
+        }
+        self.durum.onizleme_koy(yol.clone(), OnizlemeDugumu::istendi());
+        let gonderildi = self.isci.gonder(Istek::OnIzleme {
+            nesil: self.durum.nesil,
+            yol: yol.clone(),
+            kenar: crate::goruntu::ONIZLEME_KENAR,
+        });
+        if !gonderildi {
+            // İşçi kuyruğu kapalı: kayıt bırakılır, sonraki görünümde yeniden denenir.
+            self.durum.onizlemeler.remove(&yol);
         }
     }
 
@@ -687,6 +807,33 @@ impl Uygulama {
                     PanelYeri::Sag => PanelYeri::Sol,
                 };
                 self.ayar_degisti = true;
+            }
+            Eylem::SiralaTuru(tur) => {
+                if self.ayarlar.siralama_turu != tur {
+                    self.ayarlar.siralama_turu = tur;
+                    self.ayar_degisti = true;
+                    // Odak, bakılan görselde kalır; liste yeniden sıralanır.
+                    self.dizini_yeniden_tara();
+                }
+            }
+            Eylem::SiralaYonu(yon) => {
+                if self.ayarlar.siralama_yonu != yon {
+                    self.ayarlar.siralama_yonu = yon;
+                    self.ayar_degisti = true;
+                    self.dizini_yeniden_tara();
+                }
+            }
+            Eylem::BirlikteAcSatir(sira) => {
+                let Some(yol) = self.durum.indeks.get(sira).cloned() else {
+                    return;
+                };
+                match crate::kabuk::birlikte_ac::birlikte_ac(&yol) {
+                    Ok(()) => log::info!("birlikte aç (liste): {}", yol.display()),
+                    Err(k) => self.durum.hata_ver(&k),
+                }
+            }
+            Eylem::OnIzlemeIste(sira) => {
+                self.onizleme_iste(sira);
             }
             Eylem::TemaSec(tema) => {
                 if self.ayarlar.tema != tema {
@@ -844,6 +991,18 @@ impl Uygulama {
             self.kirli = true;
         }
         let durum = &mut self.durum;
+        // Yükleme göstergesi her karede işçi sayacından tazelenir (HUD tam görünüm için).
+        if durum.yukleniyor.is_some() {
+            let gecen = self
+                .yukleme_basladi
+                .map(|b| b.elapsed().as_secs_f32())
+                .unwrap_or(0.0);
+            durum.yukleme = self.aktif_ilerleme.as_ref().map(|i| crate::cekirdek::durum::YuklemeGostergesi {
+                asama: i.asama(),
+                oran: i.oran(),
+                gecen_sn: gecen,
+            });
+        }
         let mut hud_sonuc = hud::HudSonucu::default();
         // egui 0.36 kök arayüzü `Ui` üzerinden çalıştırır; paneller bu kökün içine yerleşir.
         let tam_cikti = ctx.run_ui(ham_girdi, |ui| {

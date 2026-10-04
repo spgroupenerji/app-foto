@@ -1,15 +1,53 @@
 //! Uygulama durumu: açık dosya listesi, aktif görsel, görünüm (zoom/kaydırma) ve
 //! kullanıcıya gösterilen geçici durum/hata mesajları.
 
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
 use super::ayar::Ayarlar;
 use super::hata::GorselHatasi;
+use crate::dizin::tarayici::DosyaBilgi;
 use crate::girdi::bolge::{Gorunum, Pivot};
+use crate::goruntu::YuklemeAsamasi;
 
 /// Durum ve hata mesajlarının ekranda kalma süresi.
 pub const MESAJ_SURESI: Duration = Duration::from_secs(5);
+
+/// Küçük resim eşlemesinin en çok tutacağı kayıt (bellek sınırı: kayıt başına ≤ 64 KB).
+pub const ONIZLEME_ESIK: usize = 600;
+
+/// Dizin listesi satırı için üretilmiş küçük resim.
+///
+/// Pikseller işçiden gelir; egui dokusu ilk çizimde oluşturulur ve burada saklanır.
+pub struct OnizlemeDugumu {
+    /// sRGB RGBA8 pikseller; henüz üretilmediyse `None`.
+    pub piksel: Option<(Vec<u8>, u32, u32)>,
+    /// Küçük resim üretim isteği işçiye gönderildi mi.
+    pub istendi: bool,
+    /// İlk çizimde egui bağlamına yüklenmiş doku.
+    pub doku: Option<egui::TextureHandle>,
+}
+
+impl OnizlemeDugumu {
+    pub fn istendi() -> Self {
+        Self {
+            piksel: None,
+            istendi: true,
+            doku: None,
+        }
+    }
+}
+
+/// Araç çubuğunda gösterilen yükleme göstergesinin anlık değeri.
+#[derive(Debug, Clone, Copy)]
+pub struct YuklemeGostergesi {
+    pub asama: YuklemeAsamasi,
+    /// Okuma aşamasındaki oran (0,0..=1,0); çözme aşamasında 0.
+    pub oran: f32,
+    /// Yükleme başlangıcından bu yana geçen süre (saniye).
+    pub gecen_sn: f32,
+}
 
 /// Kullanıcıya gösterilecek geçici mesaj.
 #[derive(Debug, Clone)]
@@ -35,8 +73,16 @@ impl Mesaj {
 /// Uygulamanın tüm değişken durumu.
 pub struct UygulamaDurumu {
     pub ayarlar: Ayarlar,
-    /// Açık dizindeki desteklenen görseller, Windows Gezgini sırasında.
+    /// Açık dizindeki desteklenen görseller, seçilen sıralamada.
     pub indeks: Vec<PathBuf>,
+    /// İndekse paralel dosya bilgileri (boyut, değişim zamanı).
+    pub dosya_bilgileri: Vec<DosyaBilgi>,
+    /// Dizindeki en yeni görselin yolu (listede "Yeni" rozeti için).
+    pub en_yeni_yol: Option<PathBuf>,
+    /// Küçük resim eşlemesi; giriş sayısı [`ONIZLEME_ESIK`] ile sınırlıdır.
+    pub onizlemeler: HashMap<PathBuf, OnizlemeDugumu>,
+    /// Küçük resim eşlemesinin ekleme sırası (eskiler dışarı atılır).
+    pub onizleme_sirasi: Vec<PathBuf>,
     /// Aktif görselin indeksteki yeri.
     pub konum: usize,
     pub gorunum: Gorunum,
@@ -44,6 +90,8 @@ pub struct UygulamaDurumu {
     pub aktif: Option<crate::goruntu::meta::MetaBilgi>,
     /// Yüklenmekte olan görselin indeksteki yeri.
     pub yukleniyor: Option<usize>,
+    /// Yükleme göstergesi; görsel yüklenirken her karede güncellenir.
+    pub yukleme: Option<YuklemeGostergesi>,
     /// Görsel yüksek dinamik aralıklı mı (HUD rozeti için).
     pub hdr_kaynak: bool,
     /// Takas zinciri HDR mı.
@@ -74,10 +122,15 @@ impl UygulamaDurumu {
         Self {
             ayarlar,
             indeks: Vec::new(),
+            dosya_bilgileri: Vec::new(),
+            en_yeni_yol: None,
+            onizlemeler: HashMap::new(),
+            onizleme_sirasi: Vec::new(),
             konum: 0,
             gorunum: Gorunum::default(),
             aktif: None,
             yukleniyor: None,
+            yukleme: None,
             hdr_kaynak: false,
             hdr_yuzey: false,
             mesaj: None,
@@ -112,14 +165,24 @@ impl UygulamaDurumu {
     /// Dizin listesini değiştirir ve verilen yolu aktif yapar.
     ///
     /// Yol listede yoksa ilk görsele düşülür; liste boşsa konum 0'da kalır.
-    pub fn indeksi_kur(&mut self, yeni: Vec<PathBuf>, odak: Option<&Path>) {
-        self.indeks = yeni;
+    /// Küçük resim eşlemesi korunur (yeniden taramada üretim tekrarlanmaz); eşleme
+    /// yalnızca dizin değişince uygulama tarafından temizlenir.
+    pub fn indeksi_kur(&mut self, bilgiler: Vec<DosyaBilgi>, odak: Option<&Path>) {
+        self.indeks = bilgiler.iter().map(|b| b.yol.clone()).collect();
+        self.dosya_bilgileri = bilgiler;
         self.konum = odak
             .and_then(|y| self.indeks.iter().position(|p| p == y))
             .unwrap_or(0);
+        self.en_yeni_yol = None;
         self.nesil = self.nesil.wrapping_add(1);
         self.aktif = None;
         self.yukleniyor = None;
+        self.yukleme = None;
+    }
+
+    /// İndeksteki konuma karşılık gelen dosya bilgisi.
+    pub fn bilgi(&self, sira: usize) -> Option<&DosyaBilgi> {
+        self.dosya_bilgileri.get(sira)
     }
 
     /// Bir sonraki görsele geçer; liste sonundaysa `false` döner.
@@ -172,9 +235,31 @@ impl UygulamaDurumu {
     fn gecis_hazirla(&mut self) {
         self.aktif = None;
         self.yukleniyor = None;
+        self.yukleme = None;
         self.gorunum = Gorunum::default();
         self.hdr_kaynak = false;
         self.nesil = self.nesil.wrapping_add(1);
+    }
+
+    /// Küçük resim eşlemesine kayıt koyar; eşik aşılırsa en eski kayıtlar dışarı atılır.
+    pub fn onizleme_koy(&mut self, yol: PathBuf, dugum: OnizlemeDugumu) {
+        if !self.onizlemeler.contains_key(&yol) {
+            self.onizleme_sirasi.push(yol.clone());
+        }
+        self.onizlemeler.insert(yol, dugum);
+        while self.onizlemeler.len() > ONIZLEME_ESIK {
+            let Some(eski) = self.onizleme_sirasi.first().cloned() else {
+                self.onizlemeler.clear();
+                break;
+            };
+            self.onizleme_sirasi.remove(0);
+            // Aktif görselin küçük resmi asla atılmaz: sırada sona yeniden eklenir.
+            if self.indeks.get(self.konum).is_some_and(|a| *a == eski) {
+                self.onizleme_sirasi.push(eski);
+                continue;
+            }
+            self.onizlemeler.remove(&eski);
+        }
     }
 
     /// Yeni görsel yüklendiğinde görünümü ayarlara göre oturtur.
@@ -257,12 +342,21 @@ impl UygulamaDurumu {
 mod testler {
     use super::*;
 
+    fn bilgiler(ads: &[&str]) -> Vec<DosyaBilgi> {
+        ads.iter()
+            .map(|ad| DosyaBilgi {
+                yol: PathBuf::from(ad),
+                boyut: 0,
+                tarih_ms: 0,
+            })
+            .collect()
+    }
+
     fn durum(adet: usize) -> UygulamaDurumu {
         let mut d = UygulamaDurumu::yeni(Ayarlar::default());
-        let liste: Vec<PathBuf> = (0..adet)
-            .map(|i| PathBuf::from(format!("r{i}.jpg")))
-            .collect();
-        d.indeksi_kur(liste, None);
+        let liste: Vec<String> = (0..adet).map(|i| format!("r{i}.jpg")).collect();
+        let referanslar: Vec<&str> = liste.iter().map(String::as_str).collect();
+        d.indeksi_kur(bilgiler(&referanslar), None);
         d
     }
 
@@ -312,17 +406,12 @@ mod testler {
         let mut d = durum(4);
         let hedef = PathBuf::from("r2.jpg");
         d.indeksi_kur(
-            vec![
-                PathBuf::from("r0.jpg"),
-                PathBuf::from("r1.jpg"),
-                hedef.clone(),
-                PathBuf::from("r3.jpg"),
-            ],
+            bilgiler(&["r0.jpg", "r1.jpg", "r2.jpg", "r3.jpg"]),
             Some(&hedef),
         );
         assert_eq!(d.konum, 2);
         // Listede olmayan odak ilk görsele düşer.
-        d.indeksi_kur(vec![PathBuf::from("a.jpg")], Some(&hedef));
+        d.indeksi_kur(bilgiler(&["a.jpg"]), Some(&hedef));
         assert_eq!(d.konum, 0);
     }
 
@@ -333,8 +422,49 @@ mod testler {
         d.sonraki();
         assert!(d.nesil > ilk, "görsel değişince nesil artmalı");
         let ikinci = d.nesil;
-        d.indeksi_kur(vec![PathBuf::from("x.jpg")], None);
+        d.indeksi_kur(bilgiler(&["x.jpg"]), None);
         assert!(d.nesil > ikinci);
+    }
+
+    #[test]
+    fn onizleme_esigi_eski_kayitlari_tasir() {
+        let mut d = durum(3);
+        d.onizleme_koy(
+            PathBuf::from("a.jpg"),
+            OnizlemeDugumu::istendi(),
+        );
+        d.onizleme_koy(PathBuf::from("b.jpg"), OnizlemeDugumu::istendi());
+        // Eşik: en eski kayıt dışarı atılır, aktif görselin kaydı korunur.
+        let aktif_yol = d.indeks[0].clone();
+        d.onizleme_koy(aktif_yol.clone(), OnizlemeDugumu::istendi());
+        for i in 0..(ONIZLEME_ESIK as u32) {
+            d.onizleme_koy(PathBuf::from(format!("dolgu-{i}.jpg")), OnizlemeDugumu::istendi());
+        }
+        assert!(d.onizlemeler.len() <= ONIZLEME_ESIK, "eşik aşılmamalı");
+        assert!(
+            d.onizlemeler.contains_key(&aktif_yol),
+            "aktif görselin kaydı korunmalı"
+        );
+        assert!(!d.onizlemeler.contains_key(&PathBuf::from("a.jpg")));
+        // Sıra listesi, eşlemede olmayan kayıt içermez.
+        assert!(
+            d.onizleme_sirasi
+                .iter()
+                .all(|y| d.onizlemeler.contains_key(y)),
+            "sıra listesi eşlemeyle tutarlı olmalı"
+        );
+    }
+
+    #[test]
+    fn gecis_yukleme_gostergesini_temizler() {
+        let mut d = durum(2);
+        d.yukleme = Some(YuklemeGostergesi {
+            asama: YuklemeAsamasi::Okuma,
+            oran: 0.5,
+            gecen_sn: 1.0,
+        });
+        d.sonraki();
+        assert!(d.yukleme.is_none(), "görsel değişince gösterge sıfırlanmalı");
     }
 
     #[test]
