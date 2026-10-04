@@ -1,0 +1,34 @@
+# Derleme çıktıları — yerel; yalnızca release/gorsel.exe kopyası takipte
+/target/
+
+# Yerel cargo yapılandırması — repoya çıkmaz
+/.cargo/
+
+# Yerel kod-zekası indeksleri — yalnızca bu makinede kalır
+.codegraph/
+.gitnexus/
+/graft/
+
+# Yerel çalışma dosyaları — repoya çıkmaz
+/md/
+/AGENTS.md
+/.zcodeignore
+/tests/
+
+# gitnexus kurulum artefaktları (editör yetenekleri) — yerelde kalır
+.claude/
+CLAUDE.md
+.ignore
+
+# Ortam ve sır dosyaları
+.env
+*.local.toml
+
+# Editör / işletim sistemi artıkları
+.vscode/*.log
+Thumbs.db
+desktop.ini
+
+# Test çıktıları
+/test-cikti/
+*.pdb
