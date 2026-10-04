@@ -9,21 +9,31 @@ Uygulamanın her derlemesi `build.rs` tarafından otomatik numaralandırılır:
 - Biçim: `vYYYYMMDDHHMM` — YılAyGünSaatDakika, yerel saat (örnek: `v202610040939`).
 - Derleme anında üretilir, ikiliye `DERLEME_SURUMU` olarak gömülür.
 - `gorsel --surum` ve `gorsel --dogrula` bu numarayı gösterir.
+- Yayın dosyasının adı aynı damgadan türetilir:
+  `app-foto_v<YYYYMMDD>saat<HHmm>.exe` (örnek: `app-foto_v20261004saat0939.exe`).
+- `vendor/kurulum.ps1` damgayı `DERLEME_DAMGASI` ortam değişkeniyle derlemeye verir;
+  böylece dosya adı ile gömülü sürüm daima aynıdır.
 - Kural hem bu dosyada hem `AGENTS.md`'de kayıtlıdır; her derleme uygular.
 
 ## Yayın akışı
 
-1. `cargo build --release` → `target/release/gorsel.exe`
-2. Kopyala: `cp target/release/gorsel.exe release/gorsel.exe` — yayın kopyası takiptedir
-3. `cargo run -- --dogrula` — 20 kontrolün tamamı geçmeli (çıkış kodu 0)
-4. Değişen `release/gorsel.exe` commit'lenir.
+1. `powershell -ExecutionPolicy Bypass -File vendor/kurulum.ps1` — damga üretir,
+   derler ve `release/app-foto_v<YYYYMMDD>saat<HHmm>.exe` adıyla kopyalar; eski
+   yayın kopyalarını siler.
+2. Betik kendi kendini test eder (`--dogrula`) — 20 kontrolün tamamı geçmeli
+   (çıkış kodu 0).
+3. `release/` altındaki yeni damgalı kopya (ve eski kopyanın silinmesi) commit'lenir.
+
+`cargo build --release` çıktısı `target/release/gorsel.exe` ara üründür; repoya
+girmez. Takip edilen yayın kopyası yalnızca damgalı adla `release/` altında durur.
 
 **Yeni bilgisayarda** `git clone` sonrası tek komut: `powershell -ExecutionPolicy
-Bypass -File vendor/kurulum.ps1` — araçları denetler, derler, kopyalar ve doğrular.
-Bağımlılıklar `Cargo.lock` sürümleriyle ilk derlemede otomatik iner.
+Bypass -File vendor/kurulum.ps1` — araçları denetler, derler, damgalı kopyayı üretir
+ve doğrular. Bağımlılıklar `Cargo.lock` sürümleriyle ilk derlemede otomatik iner.
 
 Derleme çıktıları yerel `target/` altındadır; `cargo clean` yalnızca `target/` siler.
-`build.rs`, taze ikiliye rağmen eski/eksik `release/gorsel.exe` konusunda uyarır.
+`build.rs`, target/'taki ikili taze olduğu hâlde `release/` altında ondan yeni bir
+`app-foto_v*.exe` kopyası yoksa uyarır.
 
 ## Yayına uygun derleme (yol damgası)
 

@@ -13,9 +13,11 @@ fn main() {
     // kullanıcı yolunu sızdırır; damga makine-yerel CARGO_HOME config'inden gelir
     // (kural: docs/README.md).
     if std::env::var("PROFILE").as_deref() == Ok("release") {
-        let damgali = std::env::var("RUSTFLAGS").unwrap_or_default()
+        let damgali = std::env::var("RUSTFLAGS")
+            .unwrap_or_default()
             .contains("remap-path-prefix")
-            || std::env::var("CARGO_ENCODED_RUSTFLAGS").unwrap_or_default()
+            || std::env::var("CARGO_ENCODED_RUSTFLAGS")
+                .unwrap_or_default()
                 .contains("remap-path-prefix");
         if !damgali {
             println!(
@@ -24,26 +26,13 @@ fn main() {
             );
         }
 
-        // Yayın kopyası tazeliği: target/'taki ikili, release/ kopyasından yeniyse
-        // kopyalama adımı atlanmıştır (kural: docs/README.md).
-        let yayin = std::path::Path::new("release/gorsel.exe");
+        // Yayın kopyası tazeliği: target/'taki ikili taze ama release/'te ondan yeni
+        // damgalı kopya yoksa kopyalama adımı atlanmıştır (kural: docs/README.md).
         let derleme_ikilisi = std::path::Path::new("target/release/gorsel.exe");
-        let kopya_taze = yayin
-            .metadata()
-            .and_then(|m| m.modified())
-            .ok()
-            .and_then(|t| {
-                derleme_ikilisi
-                    .metadata()
-                    .and_then(|y| y.modified())
-                    .ok()
-                    .map(|y| y <= t)
-            })
-            .unwrap_or(false);
-        if !kopya_taze && derleme_ikilisi.exists() {
+        if !yayin_kopyasi_taze_mi(derleme_ikilisi) && derleme_ikilisi.exists() {
             println!(
-                "cargo:warning=release/gorsel.exe eski veya yok: \
-                 target/release/gorsel.exe'den kopyalayın"
+                "cargo:warning=release/ altında taze app-foto_v*.exe kopyası yok: \
+                 vendor/kurulum.ps1 ile yayın kopyasını yenileyin"
             );
         }
     }
@@ -57,10 +46,43 @@ fn main() {
     }
 }
 
+/// target/'taki ikili, release/'teki en yeni `app-foto_v*.exe` kopyasından taze mi.
+/// Damgalı kopya hiç yoksa `false` döner.
+fn yayin_kopyasi_taze_mi(ikili: &std::path::Path) -> bool {
+    let Ok(ikili_tarihi) = ikili.metadata().and_then(|m| m.modified()) else {
+        return false;
+    };
+    std::fs::read_dir("release")
+        .ok()
+        .and_then(|okunan| {
+            okunan
+                .filter_map(|giris| giris.ok())
+                .filter(|giris| {
+                    giris
+                        .file_name()
+                        .to_string_lossy()
+                        .starts_with("app-foto_v")
+                })
+                .filter_map(|giris| giris.metadata().ok())
+                .filter_map(|meta| meta.modified().ok())
+                .max()
+        })
+        .is_some_and(|kopya_tarihi| ikili_tarihi <= kopya_tarihi)
+}
+
 /// vYYYYMMDDHHMM biçiminde derleme damgası (yerel saat; alınamazsa UTC).
+///
+/// `DERLEME_DAMGASI` ortam değişkeni geçerli bir damga taşıyorsa (vendor/kurulum.ps1
+/// koyar) onu kullanır; böylece yayın dosyasının adı ile ikiliye gömülen sürüm tek
+/// damgadan türetilir.
 fn derleme_surumu() -> String {
-    let simdi = time::OffsetDateTime::now_local()
-        .unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+    if let Ok(damga) = std::env::var("DERLEME_DAMGASI") {
+        if damga.len() == 12 && damga.bytes().all(|b| b.is_ascii_digit()) {
+            return format!("v{damga}");
+        }
+    }
+    let simdi =
+        time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
     format!(
         "v{:04}{:02}{:02}{:02}{:02}",
         simdi.year(),
