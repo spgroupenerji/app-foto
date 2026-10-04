@@ -180,6 +180,13 @@ impl UygulamaDurumu {
         self.yukleme = None;
     }
 
+    /// Küçük resim kaydını eşlemeden ve ekleme sırasından kaldırır
+    /// (istek kuyruğa yazılamadığında kalıntı bırakmaz).
+    pub fn onizleme_sil(&mut self, yol: &Path) {
+        self.onizlemeler.remove(yol);
+        self.onizleme_sirasi.retain(|p| p != yol);
+    }
+
     /// İndeksteki konuma karşılık gelen dosya bilgisi.
     pub fn bilgi(&self, sira: usize) -> Option<&DosyaBilgi> {
         self.dosya_bilgileri.get(sira)
@@ -453,6 +460,20 @@ mod testler {
                 .all(|y| d.onizlemeler.contains_key(y)),
             "sıra listesi eşlemeyle tutarlı olmalı"
         );
+    }
+
+    #[test]
+    fn onizleme_sil_eslemeden_ve_siradan_kaldirir() {
+        let mut d = durum(2);
+        let yol = PathBuf::from("k.jpg");
+        d.onizleme_koy(yol.clone(), OnizlemeDugumu::istendi());
+        assert!(d.onizlemeler.contains_key(&yol));
+        assert!(d.onizleme_sirasi.contains(&yol));
+        d.onizleme_sil(&yol);
+        assert!(!d.onizlemeler.contains_key(&yol));
+        assert!(!d.onizleme_sirasi.contains(&yol));
+        // Olmayan kayıt için çağrı güvenlidir.
+        d.onizleme_sil(&yol);
     }
 
     #[test]

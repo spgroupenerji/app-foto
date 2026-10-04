@@ -440,12 +440,14 @@ impl Uygulama {
                                 );
                             }
                             self.yeni_gorselleri_bildir(&liste);
-                            if let Some(en_yeni) =
-                                liste.iter().max_by_key(|b| b.tarih_ms).map(|b| b.yol.clone())
-                            {
-                                self.durum.en_yeni_yol = Some(en_yeni);
-                            }
+                            // Dizindeki en yeni görsel ("YENİ" rozeti) liste kurulduktan
+                            // SONRA işlenir; `indeksi_kur` rozeti sıfırlar.
+                            let en_yeni = liste
+                                .iter()
+                                .max_by_key(|b| b.tarih_ms)
+                                .map(|b| b.yol.clone());
                             self.durum.indeksi_kur(liste, odak.as_deref());
+                            self.durum.en_yeni_yol = en_yeni;
                             if let Some(dizin) = self.son_dizin.clone() {
                                 self.izleyiciyi_kur(&dizin);
                             }
@@ -504,6 +506,9 @@ impl Uygulama {
                     dugum.istendi = false;
                     if let Ok(Some(o)) = sonuc {
                         dugum.piksel = Some((o.rgba, o.genislik, o.yukseklik));
+                        // Küçük resim, HUD son çizimden sonra geldi: yeniden çizim
+                        // istenmezse kullanıcı fare oynatıncaya kadar görünmez kalır.
+                        self.kirli = true;
                     }
                     // Üretilemeyen biçimlerde (HDR/RAW) piksel yok kalır: kalıcı yer tutucu.
                 }
@@ -692,8 +697,8 @@ impl Uygulama {
             kenar: crate::goruntu::ONIZLEME_KENAR,
         });
         if !gonderildi {
-            // İşçi kuyruğu kapalı: kayıt bırakılır, sonraki görünümde yeniden denenir.
-            self.durum.onizlemeler.remove(&yol);
+            // İşçi kuyruğu kapalı: kayıt tamamen bırakılır, sonraki görünümde yeniden denenir.
+            self.durum.onizleme_sil(&yol);
         }
     }
 

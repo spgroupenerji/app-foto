@@ -242,7 +242,7 @@ fn alt_cubuk(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
                     ui.label(egui::RichText::new(ozet).strong());
                     if meta.yonelim > 1 {
                         ui.label(format!(
-                            "⟲ {}",
+                            "Yönelim: {}",
                             crate::goruntu::meta::yonelim_adi(meta.yonelim)
                         ));
                     }

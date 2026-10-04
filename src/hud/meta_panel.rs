@@ -27,15 +27,11 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
             ui.horizontal(|ui| {
                 ui.heading("Bilgi");
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    if ui
-                        .add(
-                            egui::Button::new("✕")
-                                .small()
-                                .min_size(egui::vec2(super::DOKUNMATIK_HEDEF, 0.0)),
-                        )
-                        .on_hover_text("Paneli kapat (I)")
-                        .clicked()
-                    {
+                    if super::ikon::ikon_dugme(
+                        ui,
+                        super::ikon::Ikon::Carpi,
+                        "Paneli kapat (I)",
+                    ) {
                         acik = false;
                     }
                 });
