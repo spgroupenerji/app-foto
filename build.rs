@@ -1,6 +1,6 @@
 //! Derleme zamanı kaynakları: EXE ikonu ve derleme sürüm numarası.
 //!
-//! Sürüm kuralı (bkz. docs/README.md): her derlemede `vYYYYMMDDHHMM` (yerel saat,
+//! Sürüm kuralı (bkz. docs/README.md): her derlemede `beta-vYYYYMMDDHHMM` (yerel saat,
 //! YılAyGünSaatDakika) üretilip `DERLEME_SURUMU` ortam değişkeniyle ikiliye gömülür;
 //! `--surum` ve `--dogrula` gösterir. rerun-if yönergesi bilinçli olarak yazılmaz:
 //! öntanımlı davranışla paketteki her değişiklik bu betiği yeniden çalıştırır ve
@@ -31,7 +31,7 @@ fn main() {
         let derleme_ikilisi = std::path::Path::new("target/release/gorsel.exe");
         if !yayin_kopyasi_taze_mi(derleme_ikilisi) && derleme_ikilisi.exists() {
             println!(
-                "cargo:warning=release/ altında taze app-foto_v*.exe kopyası yok: \
+                "cargo:warning=release/ altında taze app-foto_beta-v*.exe kopyası yok: \
                  vendor/kurulum.ps1 ile yayın kopyasını yenileyin"
             );
         }
@@ -46,7 +46,7 @@ fn main() {
     }
 }
 
-/// target/'taki ikili, release/'teki en yeni `app-foto_v*.exe` kopyasından taze mi.
+/// target/'taki ikili, release/'teki en yeni `app-foto_beta-v*.exe` kopyasından taze mi.
 /// Damgalı kopya hiç yoksa `false` döner.
 fn yayin_kopyasi_taze_mi(ikili: &std::path::Path) -> bool {
     let Ok(ikili_tarihi) = ikili.metadata().and_then(|m| m.modified()) else {
@@ -61,7 +61,7 @@ fn yayin_kopyasi_taze_mi(ikili: &std::path::Path) -> bool {
                     giris
                         .file_name()
                         .to_string_lossy()
-                        .starts_with("app-foto_v")
+                        .starts_with("app-foto_beta-v")
                 })
                 .filter_map(|giris| giris.metadata().ok())
                 .filter_map(|meta| meta.modified().ok())
@@ -70,7 +70,7 @@ fn yayin_kopyasi_taze_mi(ikili: &std::path::Path) -> bool {
         .is_some_and(|kopya_tarihi| ikili_tarihi <= kopya_tarihi)
 }
 
-/// vYYYYMMDDHHMM biçiminde derleme damgası (yerel saat; alınamazsa UTC).
+/// beta-vYYYYMMDDHHMM biçiminde derleme damgası (yerel saat; alınamazsa UTC).
 ///
 /// `DERLEME_DAMGASI` ortam değişkeni geçerli bir damga taşıyorsa (vendor/kurulum.ps1
 /// koyar) onu kullanır; böylece yayın dosyasının adı ile ikiliye gömülen sürüm tek
@@ -78,13 +78,13 @@ fn yayin_kopyasi_taze_mi(ikili: &std::path::Path) -> bool {
 fn derleme_surumu() -> String {
     if let Ok(damga) = std::env::var("DERLEME_DAMGASI") {
         if damga.len() == 12 && damga.bytes().all(|b| b.is_ascii_digit()) {
-            return format!("v{damga}");
+            return format!("beta-v{damga}");
         }
     }
     let simdi =
         time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
     format!(
-        "v{:04}{:02}{:02}{:02}{:02}",
+        "beta-v{:04}{:02}{:02}{:02}{:02}",
         simdi.year(),
         u8::from(simdi.month()),
         simdi.day(),

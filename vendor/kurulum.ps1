@@ -15,8 +15,8 @@ if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
 }
 
 # Sürüm damgası bir kez üretilir: hem ikiliye gömülür hem yayın dosyasının adını verir
-# (kural: docs/README.md — vYYYYMMDDHHMM). build.rs her derlemede yeniden çalışsın diye
-# damgası tazelenir; aksi halde tam önbellekli derlemede eski damga kalır.
+# (kural: docs/README.md — app-foto_beta-vYYYYMMDDHHMM). build.rs her derlemede yeniden
+# çalışsın diye damgası tazelenir; aksi halde tam önbellekli derlemede eski damga kalır.
 (Get-Item build.rs).LastWriteTime = Get-Date
 $damga = Get-Date -Format yyyyMMddHHmm
 $env:DERLEME_DAMGASI = $damga
@@ -26,10 +26,10 @@ if ($LASTEXITCODE -ne 0) {
     throw "Derleme başarısız. Visual Studio 2022 Build Tools ve Windows SDK kurulu mu? (bkz. docs/README.md)"
 }
 
-$yayinAdi = "app-foto_v$damga.exe"
+$yayinAdi = "app-foto_beta-v$damga.exe"
 New-Item -ItemType Directory -Force -Path release | Out-Null
-# release/ her zaman tek taze kopya taşır: eski adlar temizlenir.
-Remove-Item release/gorsel.exe, release/app-foto_v*.exe -Force -ErrorAction SilentlyContinue
+# release/ her zaman tek taze kopya taşır: eski adlar (beta ve eski damga düzeni) temizlenir.
+Remove-Item release/gorsel.exe, release/app-foto_beta-v*.exe, release/app-foto_v*.exe -Force -ErrorAction SilentlyContinue
 Copy-Item target/release/gorsel.exe "release/$yayinAdi" -Force
 Write-Host "Yayın kopyası tazelendi: release/$yayinAdi"
 

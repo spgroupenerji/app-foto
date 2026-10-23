@@ -21,7 +21,7 @@ egui arayüz çerçevesi ve wgpu grafik altyapısıyla geliştirilen, çok iş p
 
 ## Hazır Uygulama
 
-`release` klasöründeki `app-foto_v<YYYYMMDDHHMM>.exe` dosyası kurulum gerektirmez ve doğrudan çalıştırılır. Klasörde yalnızca en güncel sürüm bulundurulur; her derlemede önceki sürümler otomatik olarak kaldırılır. Dosya adındaki damga, derleme anını gösterir ve uygulama içindeki sürüm bilgisiyle aynıdır.
+`release` klasöründeki `app-foto_beta-v<YYYYMMDDHHMM>.exe` dosyası kurulum gerektirmez ve doğrudan çalıştırılır. Klasörde yalnızca en güncel sürüm bulundurulur; her derlemede önceki sürümler otomatik olarak kaldırılır. Dosya adındaki damga, derleme anını gösterir ve uygulama içindeki sürüm bilgisiyle aynıdır.
 
 ## Kaynaktan Derleme
 
@@ -31,7 +31,7 @@ Gereksinimler: Rust (MSVC hedefi) ve Visual Studio 2022 C++ Build Tools (Windows
 powershell -ExecutionPolicy Bypass -File vendor\kurulum.ps1
 ```
 
-Betik ön koşulları denetler, sürüm damgasını üretir, uygulamayı derler, çıktıyı `release\app-foto_v<YYYYMMDDHHMM>.exe` adıyla kopyalar, önceki kopyaları kaldırır ve 20 kontrolü kapsayan kendi kendini test çalıştırır. Bağımlılıklar ilk derlemede `Cargo.lock` sürümleriyle otomatik iner; sonraki derlemeler artımlıdır.
+Betik ön koşulları denetler, sürüm damgasını üretir, uygulamayı derler, çıktıyı `release\app-foto_beta-v<YYYYMMDDHHMM>.exe` adıyla kopyalar, önceki kopyaları kaldırır ve 20 kontrolü kapsayan kendi kendini test çalıştırır. Bağımlılıklar ilk derlemede `Cargo.lock` sürümleriyle otomatik iner; sonraki derlemeler artımlıdır.
 
 Elle derlemede (`cargo build --release`) ikili ara ürün olarak `target\release\gorsel.exe` altında üretilir; depoya girmez. Takip edilen yayın kopyası yalnızca damgalı adla `release\` altında oluşturulur.
 
@@ -72,7 +72,7 @@ Betik ön koşulları denetler, bağımlılıkları indirir ve uygulamayı damga
 
 ## Sürümlandırma
 
-Her derleme, derleme anını gösteren `vYYYYMMDDHHMM` (yıl-ay-gün-saat-dakika, yerel saat) damgasını otomatik alır. Damga `vendor/kurulum.ps1` tarafından tek kez üretilir; hem ikiliye `DERLEME_SURUMU` olarak gömülür hem de yayın dosyasının adını oluşturur, böylece dosya adı ile uygulama sürümü daima aynıdır. Sürüm bilgisi `gorsel --surum` komutuyla ve kendi kendini test raporunda görüntülenir.
+Her derleme, derleme anını gösteren `beta-vYYYYMMDDHHMM` (yıl-ay-gün-saat-dakika, yerel saat) damgasını otomatik alır. Damga `vendor/kurulum.ps1` tarafından tek kez üretilir; hem ikiliye `DERLEME_SURUMU` olarak gömülür hem de yayın dosyasının adını (`app-foto_beta-v<YYYYMMDDHHMM>.exe`) oluşturur, böylece dosya adı ile uygulama sürümü daima aynıdır. Sürüm bilgisi `gorsel --surum` komutuyla ve kendi kendini test raporunda görüntülenir.
 
 ## Depo Yapısı
 
