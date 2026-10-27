@@ -7,6 +7,7 @@
 
 use std::path::Path;
 
+use winit::dpi::{PhysicalPosition, PhysicalSize};
 use winit::window::Window;
 
 use crate::cekirdek::hata::{GorselHatasi, Sonuc};
@@ -139,6 +140,44 @@ pub fn yukle(pencere: &Window) -> Sonuc<bool> {
     }
     pencereyi_yerlestir(pencere, &yerlesim)?;
     Ok(true)
+}
+
+/// Pencerenin monitör çalışma alanını aşmasını engeller ve dışarıdaysa ortalar.
+///
+/// Kayıtlı yerleşim farklı DPI veya monitör düzeninden gelebilir; bu kontrol pencere
+/// görünür olmadan önce çalışır ve modallerin ekran dışına taşmasını önler.
+pub fn ekrana_sigdir(pencere: &Window) -> Sonuc<()> {
+    let Some(monitor) = pencere.current_monitor() else {
+        return Ok(());
+    };
+    let monitor_konum = monitor.position();
+    let monitor_olcu = monitor.size();
+    let en_cok_g = (u64::from(monitor_olcu.width) * 92 / 100) as u32;
+    let en_cok_y = (u64::from(monitor_olcu.height) * 88 / 100) as u32;
+    let ic = pencere.inner_size();
+    if ic.width > en_cok_g || ic.height > en_cok_y {
+        let _ = pencere.request_inner_size(PhysicalSize::new(
+            ic.width.min(en_cok_g).max(640),
+            ic.height.min(en_cok_y).max(480),
+        ));
+    }
+
+    let dis = pencere.outer_size();
+    let konum = pencere
+        .outer_position()
+        .map_err(|k| GorselHatasi::Pencere(format!("pencere konumu okunamadı: {k}")))?;
+    let disarida = konum.x < monitor_konum.x
+        || konum.y < monitor_konum.y
+        || konum.x + dis.width as i32 > monitor_konum.x + monitor_olcu.width as i32
+        || konum.y + dis.height as i32 > monitor_konum.y + monitor_olcu.height as i32;
+    if disarida {
+        let x = monitor_konum.x
+            + (monitor_olcu.width.saturating_sub(dis.width) / 2) as i32;
+        let y = monitor_konum.y
+            + (monitor_olcu.height.saturating_sub(dis.height) / 2) as i32;
+        pencere.set_outer_position(PhysicalPosition::new(x, y));
+    }
+    Ok(())
 }
 
 /// Pencerenin mevcut yerleşimini Win32'den okur.

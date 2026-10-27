@@ -150,7 +150,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                 .inner_margin(Margin::same(0)),
         )
         .show(&ctx, |ui| {
-            ui.set_width(620.0);
+            ui.set_width(640.0);
             ui.add_space(tasarim::BOSLUK_SM);
             let arama_id = egui::Id::new("gorsel-komut-arama");
             ui.memory_mut(|m| m.request_focus(arama_id));

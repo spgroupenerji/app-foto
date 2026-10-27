@@ -32,7 +32,7 @@ use crate::kabuk::dosya_sec::DiyalogTuru;
 use crate::pencere::{self, mica, tam_ekran};
 
 /// Yerleşim kaydı yoksa kullanılan pencere ölçüsü.
-pub const VARSAYILAN_OLCU: (u32, u32) = (1280, 800);
+pub const VARSAYILAN_OLCU: (u32, u32) = (1120, 720);
 
 /// İki sol tıklamanın çift tıklama sayılması için azami aralık.
 pub const CIFT_TIK_ARALIGI: std::time::Duration = std::time::Duration::from_millis(400);
@@ -200,7 +200,14 @@ impl Uygulama {
         if let Err(k) = pencere::yerlesim::yukle(&pencere) {
             log::warn!("pencere yerleşimi yüklenemedi: {k}");
         }
+        if let Err(k) = pencere::yerlesim::ekrana_sigdir(&pencere) {
+            log::warn!("pencere ekrana sığdırılamadı: {k}");
+        }
         pencere.set_visible(true);
+        // Görünür olduktan sonra monitör bilgisi güvenilir; taşan kayıtlı yerleşimi sığdır.
+        if let Err(k) = pencere::yerlesim::ekrana_sigdir(&pencere) {
+            log::warn!("pencere ekrana sığdırılamadı: {k}");
+        }
 
         let malzeme = mica::Malzeme::ayardan(self.ayarlar.mica_etkin);
         if malzeme != mica::Malzeme::Yok {
@@ -1407,6 +1414,25 @@ mod testler {
         u.dizini_yukle();
         assert!(u.son_dizin.is_none(), "olmayan yol için tarama yapılmamalı");
         assert!(u.durum.mesaj.as_ref().is_some_and(|m| m.onemli));
+    }
+
+    #[test]
+    fn sirala_eylemleri_ayarlari_gunceller() {
+        let mut u = uygulama(None);
+        u.eylem_uygula(Eylem::SiralaTuru(
+            crate::cekirdek::ayar::SiralamaTuru::Tur,
+        ));
+        assert_eq!(
+            u.ayarlar.siralama_turu,
+            crate::cekirdek::ayar::SiralamaTuru::Tur
+        );
+        u.eylem_uygula(Eylem::SiralaYonu(
+            crate::cekirdek::ayar::SiralamaYonu::Azalan,
+        ));
+        assert_eq!(
+            u.ayarlar.siralama_yonu,
+            crate::cekirdek::ayar::SiralamaYonu::Azalan
+        );
     }
 
     #[test]

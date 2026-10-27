@@ -54,7 +54,7 @@ pub fn dugme(
     let kisayol_alani = kisayol
         .as_ref()
         .map_or(0.0, |g| g.size().x + 20.0);
-    let yukseklik = 36.0;
+    let yukseklik = 44.0;
     let genislik = (tasarim::BOSLUK_MD * 2.0
         + ikon_alani
         + aralik
@@ -178,7 +178,7 @@ pub fn rozet(ui: &mut Ui, metin: &str, tur: RozetTuru) -> Response {
         .corner_radius(CornerRadius::same(5))
         .inner_margin(Margin::symmetric(6, 1))
         .show(ui, |ui| {
-            ui.label(RichText::new(metin).size(10.5).strong().color(metin_rengi));
+            ui.label(RichText::new(metin).size(11.0).strong().color(metin_rengi));
         })
         .response
 }

@@ -18,8 +18,8 @@ pub const BOSLUK_LG: f32 = 16.0;
 pub const BOSLUK_XL: f32 = 24.0;
 
 pub const DOKUNMATIK_HEDEF: f32 = 44.0;
-pub const UST_CUBUK_YUKSEKLIGI: f32 = 56.0;
-pub const ALT_CUBUK_YUKSEKLIGI: f32 = 28.0;
+pub const UST_CUBUK_YUKSEKLIGI: f32 = 52.0;
+pub const ALT_CUBUK_YUKSEKLIGI: f32 = 26.0;
 pub const SATIR_RAHAT: f32 = 64.0;
 pub const SATIR_KOMPAKT: f32 = 48.0;
 pub const KUCUK_RESIM_RAHAT: f32 = 52.0;
@@ -175,6 +175,22 @@ pub fn fontlari_yukle(ctx: &egui::Context) {
         .families
         .insert(FontFamily::Monospace, mono);
 
+    // Lucide ikon fontu: shadcn ile aynı çizgi dili, egui atlasında keskin glifler.
+    for font in iconflow::fonts() {
+        fonts.font_data.insert(
+            font.family.to_owned(),
+            Arc::new(FontData::from_static(font.bytes)),
+        );
+        if let Some(oransal_aile) = fonts.families.get_mut(&FontFamily::Proportional) {
+            oransal_aile.push(font.family.to_owned());
+        }
+        let mut ikon_ailesi = vec![font.family.to_owned()];
+        ikon_ailesi.extend(varsayilan_oransal.clone());
+        fonts
+            .families
+            .insert(FontFamily::Name(font.family.into()), ikon_ailesi);
+    }
+
     ctx.set_fonts(fonts);
 }
 
@@ -228,7 +244,7 @@ fn metin_stilleri() -> BTreeMap<TextStyle, FontId> {
         (TextStyle::Body, FontId::new(13.0, FontFamily::Proportional)),
         (TextStyle::Button, FontId::new(13.0, FontFamily::Proportional)),
         (TextStyle::Small, FontId::new(11.0, FontFamily::Proportional)),
-        (TextStyle::Monospace, FontId::new(11.5, FontFamily::Monospace)),
+        (TextStyle::Monospace, FontId::new(11.0, FontFamily::Monospace)),
         (
             TextStyle::Name("bolum".into()),
             FontId::new(11.0, baslik.clone()),

@@ -10,6 +10,7 @@ use egui::{
 use crate::cekirdek::ayar::{PanelYeri, Tema};
 use crate::cekirdek::durum::UygulamaDurumu;
 use crate::girdi::Eylem;
+use crate::girdi::klavye::TUS_ZOOM_CARPI;
 use crate::goruntu::YuklemeAsamasi;
 
 use super::ikon::{self, Ikon};
@@ -27,6 +28,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &UygulamaDurumu, sonuc: &mut HudSonucu) {
             let dar = ui.available_width() < 1800.0;
             ui.with_layout(egui::Layout::left_to_right(Align::Center), |ui| {
                 sol_grup(ui, durum, sonuc, p, dar);
+                ui.add_space(tasarim::BOSLUK_SM);
                 sag_grup(ui, durum, sonuc, dar);
             });
             ui.painter().hline(
@@ -76,7 +78,9 @@ fn sol_grup(
         );
     } else {
         ui.menu_button(
-            RichText::new("Menü").size(12.0).color(p.soluk),
+            RichText::new(format!("{} Menü", ikon::karakter(Ikon::Menu)))
+                .size(12.0)
+                .color(p.soluk),
             |ui| {
                 dosya_maddeleri(ui, sonuc);
                 ui.separator();
@@ -88,7 +92,7 @@ fn sol_grup(
     let ac = bilesen::dugme(
         ui,
         "Aç",
-        bilesen::DugmeTuru::Birincil,
+        bilesen::DugmeTuru::Ikincil,
         Some(Ikon::Klasor),
         if dar { None } else { Some("Ctrl O") },
     );
@@ -115,6 +119,35 @@ fn sag_grup(
     sonuc: &mut HudSonucu,
     dar: bool,
 ) {
+    let p = Palet::ui(ui);
+    let eksi = ikon::ikon_dugme_boyut(ui, Ikon::Eksi, false, "Uzaklaştır", 32.0);
+    if bilesen::tiklandi(ui, &eksi) {
+        sonuc.ekle(Eylem::Yakinlastir {
+            carpan: 1.0 / TUS_ZOOM_CARPI,
+            pivot: None,
+        });
+    }
+    ui.add_sized(
+        [52.0, 44.0],
+        egui::Label::new(
+            RichText::new(durum.zoom_metni())
+                .monospace()
+                .size(11.0)
+                .color(p.metin),
+        )
+        .selectable(false),
+    );
+    let arti = ikon::ikon_dugme_boyut(ui, Ikon::Arti, false, "Yakınlaştır", 32.0);
+    if bilesen::tiklandi(ui, &arti) {
+        sonuc.ekle(Eylem::Yakinlastir {
+            carpan: TUS_ZOOM_CARPI,
+            pivot: None,
+        });
+    }
+    let sigdir = ikon::ikon_dugme_boyut(ui, Ikon::Sigdir, false, "Sığdır (S)", 32.0);
+    if bilesen::tiklandi(ui, &sigdir) {
+        sonuc.ekle(Eylem::Sigdir);
+    }
     ui.separator();
     if !dar && durum.yukleme.is_some() {
         yukleme_gostergesi(ui, durum);
@@ -348,7 +381,7 @@ fn yukleme_gostergesi(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
                 ui.label(
                     RichText::new(format!("{:.1} sn", g.gecen_sn))
                         .monospace()
-                        .size(10.5)
+                        .size(11.0)
                         .color(p.soluk),
                 );
             });
@@ -362,7 +395,7 @@ fn alt_icerik(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
         if let Some(meta) = &durum.aktif {
             ui.label(
                 RichText::new(durum.dosya_adi())
-                    .size(10.5)
+                    .size(11.0)
                     .color(p.metin),
             );
             ui.label(
@@ -372,7 +405,7 @@ fn alt_icerik(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
                     meta.cozunurluk_metni(),
                     meta.boyut_metni()
                 ))
-                .size(10.5)
+                .size(11.0)
                 .color(p.soluk),
             );
             if meta.yonelim > 1 {
@@ -381,14 +414,14 @@ fn alt_icerik(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
                         "Yönelim: {}",
                         crate::goruntu::meta::yonelim_adi(meta.yonelim)
                     ))
-                    .size(10.5)
+                    .size(11.0)
                     .color(p.cok_soluk),
                 );
             }
         } else {
             ui.label(
                 RichText::new("Görsel yükleniyor…")
-                    .size(10.5)
+                    .size(11.0)
                     .color(p.cok_soluk),
             );
         }
@@ -404,25 +437,25 @@ fn alt_icerik(ui: &mut egui::Ui, durum: &UygulamaDurumu) {
         ui.with_layout(egui::Layout::right_to_left(Align::Center), |ui| {
             ui.label(
                 RichText::new(&durum.adaptor_bilgisi)
-                    .size(10.5)
+                    .size(11.0)
                     .color(p.cok_soluk),
             );
             ui.label(
                 RichText::new(format!("{:.1} ms", durum.kare_suresi_ms))
                     .monospace()
-                    .size(10.5)
+                    .size(11.0)
                     .color(p.cok_soluk),
             );
             ui.label(
                 RichText::new(durum.zoom_metni())
                     .monospace()
-                    .size(10.5)
+                    .size(11.0)
                     .color(p.soluk),
             );
             ui.label(
                 RichText::new(durum.konum_metni())
                     .monospace()
-                    .size(10.5)
+                    .size(11.0)
                     .color(p.cok_soluk),
             );
         });

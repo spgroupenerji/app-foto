@@ -63,7 +63,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu) {
                             if let Some(ipucu) = &ipucu {
                                 ui.add(
                                     egui::Label::new(
-                                        RichText::new(ipucu).size(10.5).color(p.soluk),
+                                        RichText::new(ipucu).size(11.0).color(p.soluk),
                                     )
                                     .truncate(),
                                 );

@@ -33,8 +33,8 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                 .inner_margin(Margin::same(0)),
         )
         .show(&ctx, |ui| {
-            ui.set_width(760.0);
-            ui.set_height(560.0);
+            ui.set_width(720.0);
+            ui.set_height(520.0);
             ui.horizontal(|ui| {
                 ui.add_space(tasarim::BOSLUK_LG);
                 ui.vertical(|ui| {
@@ -69,7 +69,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
             ui.horizontal(|ui| {
                 ui.add_space(tasarim::BOSLUK_SM);
                 ui.vertical(|ui| {
-                    ui.set_width(168.0);
+                    ui.set_width(160.0);
                     ui.add_space(tasarim::BOSLUK_SM);
                     for (sira, ad) in SEKMELER.iter().enumerate() {
                         let secili = sira == sekme;
@@ -84,7 +84,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                             .frame(false)
                             .fill(if secili { p.vurgu_yumusak } else { egui::Color32::TRANSPARENT })
                             .corner_radius(CornerRadius::same(tasarim::YARICAP_LG))
-                            .min_size(vec2(160.0, 34.0)),
+                            .min_size(vec2(152.0, 34.0)),
                         );
                         if yanit.clicked() {
                             sekme = sira;
@@ -99,7 +99,7 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
                         ui.add_space(tasarim::BOSLUK_MD);
-                        ui.set_width(520.0);
+                        ui.set_width(500.0);
                         match sekme {
                             0 => genel(
                                 ui,
@@ -405,7 +405,7 @@ fn ayar_satiri(
             |ui| {
                 ui.label(RichText::new(ad).size(12.0).strong().color(p.metin));
                 ui.add(
-                    egui::Label::new(RichText::new(aciklama).size(10.5).color(p.soluk))
+                    egui::Label::new(RichText::new(aciklama).size(11.0).color(p.soluk))
                         .truncate(),
                 );
             },

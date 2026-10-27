@@ -207,8 +207,8 @@ impl Default for Ayarlar {
             bilgi_paneli_acik: false,
             dosya_listesi_acik: true,
             dosya_listesi_yeri: PanelYeri::default(),
-            dosya_listesi_genislik: 260.0,
-            bilgi_paneli_genislik: 300.0,
+            dosya_listesi_genislik: 280.0,
+            bilgi_paneli_genislik: 320.0,
             liste_yogunlugu: Yogunluk::default(),
             hareket_azalt: false,
         }
@@ -216,8 +216,8 @@ impl Default for Ayarlar {
 }
 
 /// Panel genişliklerinin izin verilen aralıkları (puan).
-pub const LISTE_GENISLIK_ARALIGI: std::ops::RangeInclusive<f32> = 160.0..=560.0;
-pub const BILGI_GENISLIK_ARALIGI: std::ops::RangeInclusive<f32> = 200.0..=640.0;
+pub const LISTE_GENISLIK_ARALIGI: std::ops::RangeInclusive<f32> = 200.0..=480.0;
+pub const BILGI_GENISLIK_ARALIGI: std::ops::RangeInclusive<f32> = 240.0..=520.0;
 
 impl Ayarlar {
     pub const DOSYA_ADI: &'static str = "ayarlar.json";

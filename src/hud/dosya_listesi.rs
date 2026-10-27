@@ -92,28 +92,33 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                     if super::bilesen::tiklandi(ui, &kapat) {
                         acik = false;
                     }
-                    siralama_menusu(ui, durum, sonuc);
                 });
             });
 
             ui.add_space(tasarim::BOSLUK_XS);
             ui.horizontal(|ui| {
-                ui.label(
-                    RichText::new(format!(
-                        "{} · {}",
-                        tur_etiketi(durum.ayarlar.siralama_turu),
-                        yon_etiketi(durum.ayarlar.siralama_yonu)
-                    ))
-                    .size(11.0)
-                    .color(p.cok_soluk),
+                let etiket = format!(
+                    "{} · {}",
+                    tur_etiketi(durum.ayarlar.siralama_turu),
+                    yon_etiketi(durum.ayarlar.siralama_yonu)
+                );
+                ui.menu_button(
+                    RichText::new(format!("{} {etiket}", ikon::karakter(Ikon::Sirala)))
+                        .size(12.0)
+                        .color(p.soluk),
+                    |ui| siralama_secenekleri(ui, durum, sonuc),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    let yogunluk = super::bilesen::dugme(
+                    let yogunluk = ikon::ikon_dugme_boyut(
                         ui,
-                        durum.ayarlar.liste_yogunlugu.etiket(),
-                        super::bilesen::DugmeTuru::Hayalet,
-                        None,
-                        None,
+                        Ikon::Liste,
+                        durum.ayarlar.liste_yogunlugu
+                            == crate::cekirdek::ayar::Yogunluk::Kompakt,
+                        &format!(
+                            "Yoğunluk: {} — değiştir",
+                            durum.ayarlar.liste_yogunlugu.etiket()
+                        ),
+                        32.0,
                     );
                     if super::bilesen::tiklandi(ui, &yogunluk) {
                         sonuc.ekle(Eylem::YogunlukDegistir);
@@ -163,13 +168,13 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
             ui.horizontal(|ui| {
                 ui.label(
                     RichText::new(format!("{} görsel", durum.indeks.len()))
-                        .size(10.5)
+                        .size(11.0)
                         .color(p.cok_soluk),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.label(
                         RichText::new(crate::goruntu::meta::bayt_bicimle(toplam))
-                            .size(10.5)
+                            .size(11.0)
                             .color(p.cok_soluk),
                     );
                 });
@@ -189,44 +194,36 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
     }
 }
 
-fn siralama_menusu(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
-    let ipucu = format!(
-        "Sıralama: {} ({}) — değiştirmek için tıklayın",
-        tur_etiketi(durum.ayarlar.siralama_turu),
-        yon_etiketi(durum.ayarlar.siralama_yonu)
+fn siralama_secenekleri(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
+    let p = Palet::ui(ui);
+    ui.label(
+        RichText::new("SIRALA")
+            .text_style(egui::TextStyle::Name("bolum".into()))
+            .color(p.cok_soluk),
     );
-    let yanit = ikon::ikon_dugme_boyut(ui, Ikon::Sirala, false, &ipucu, 32.0);
-    egui::Popup::menu(&yanit).show(|ui| {
-        let p = Palet::ui(ui);
-        ui.label(
-            RichText::new("SIRALA")
-                .text_style(egui::TextStyle::Name("bolum".into()))
-                .color(p.cok_soluk),
-        );
-        for (tur, etiket) in SIRALAMA_ETIKETLERI {
-            let secili = durum.ayarlar.siralama_turu == tur;
-            if menu_maddesi(ui, etiket, secili) {
-                sonuc.ekle(Eylem::SiralaTuru(tur));
-                ui.close();
-            }
+    for (tur, etiket) in SIRALAMA_ETIKETLERI {
+        let secili = durum.ayarlar.siralama_turu == tur;
+        if menu_maddesi(ui, etiket, secili) {
+            sonuc.ekle(Eylem::SiralaTuru(tur));
+            ui.close();
         }
-        ui.separator();
-        ui.label(
-            RichText::new("YÖN")
-                .text_style(egui::TextStyle::Name("bolum".into()))
-                .color(p.cok_soluk),
-        );
-        for (yon, etiket) in [
-            (SiralamaYonu::Artan, "Artan (A→Z, eski→yeni)"),
-            (SiralamaYonu::Azalan, "Azalan (Z→A, yeni→eski)"),
-        ] {
-            let secili = durum.ayarlar.siralama_yonu == yon;
-            if menu_maddesi(ui, etiket, secili) {
-                sonuc.ekle(Eylem::SiralaYonu(yon));
-                ui.close();
-            }
+    }
+    ui.separator();
+    ui.label(
+        RichText::new("YÖN")
+            .text_style(egui::TextStyle::Name("bolum".into()))
+            .color(p.cok_soluk),
+    );
+    for (yon, etiket) in [
+        (SiralamaYonu::Artan, "Artan (A→Z, eski→yeni)"),
+        (SiralamaYonu::Azalan, "Azalan (Z→A, yeni→eski)"),
+    ] {
+        let secili = durum.ayarlar.siralama_yonu == yon;
+        if menu_maddesi(ui, etiket, secili) {
+            sonuc.ekle(Eylem::SiralaYonu(yon));
+            ui.close();
         }
-    });
+    }
 }
 
 fn menu_maddesi(ui: &mut egui::Ui, etiket: &str, secili: bool) -> bool {
@@ -328,7 +325,7 @@ fn satir_ciz(
         pos2(metin_x, rect.top() + satir_yuksekligi - 20.0),
         egui::Align2::LEFT_TOP,
         alt,
-        FontId::proportional(10.5),
+        FontId::proportional(11.0),
         p.cok_soluk,
     );
 
@@ -343,7 +340,7 @@ fn satir_ciz(
             rozet.center(),
             egui::Align2::CENTER_CENTER,
             "YENİ",
-            FontId::proportional(9.0),
+            FontId::proportional(10.0),
             p.vurgu_metin,
         );
     }

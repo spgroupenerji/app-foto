@@ -30,6 +30,7 @@ windows = { version = "0.62.2", features = ["Win32_Foundation", "Win32_Graphics_
 winit = "0.30.13"
 winreg = "0.56.0"
 zune-jpeg = "0.5.15"
+iconflow = { version = "2.1.0", default-features = false, features = ["pack-lucide"] }
 
 [build-dependencies]
 time = { version = "0.3.55", features = ["local-offset"] }

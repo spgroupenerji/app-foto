@@ -90,7 +90,7 @@ Her derleme, derleme anını gösteren `beta-vYYYYMMDDHHMM` (yıl-ay-gün-saat-d
 
 ## Lisans
 
-Uygulama bağımlılıklarının lisans bilgileri `Cargo.toml` ve `Cargo.lock` kayıtları üzerinden izlenebilir; yeniden dağıtım sırasında ilgili lisans yükümlülükleri dikkate alınmalıdır.
+Uygulama bağımlılıklarının lisans bilgileri `Cargo.toml` ve `Cargo.lock` kayıtları üzerinden izlenebilir; yeniden dağıtım sırasında ilgili lisans yükümlülükleri dikkate alınmalıdır. Arayüz ikonları Lucide (ISC) setinden `iconflow` (MIT) aracılığıyla yüklenir.
 
 ---
 

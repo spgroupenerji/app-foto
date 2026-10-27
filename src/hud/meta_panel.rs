@@ -113,14 +113,14 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
                 ui.label(
                     RichText::new(format!("{:.1} ms kare", durum.kare_suresi_ms))
                         .monospace()
-                        .size(10.5)
+                        .size(11.0)
                         .color(p.cok_soluk),
                 );
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                     ui.add(
                         egui::Label::new(
                             RichText::new(&durum.adaptor_bilgisi)
-                                .size(10.5)
+                                .size(11.0)
                                 .color(p.cok_soluk),
                         )
                         .truncate(),

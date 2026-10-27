@@ -1,14 +1,13 @@
 //! Görsel tuvali katmanları: boş durum, yükleme kartı ve yüzen yakınlaştırma pilu.
 
-use egui::{Align2, Area, CornerRadius, Margin, Order, RichText, Sense, Stroke, vec2};
+use egui::{Align2, Area, CornerRadius, Order, RichText, Sense, vec2};
 
 use crate::cekirdek::durum::UygulamaDurumu;
 use crate::girdi::Eylem;
-use crate::girdi::klavye::TUS_ZOOM_CARPI;
 use crate::goruntu::YuklemeAsamasi;
 
 use super::ikon::{self, Ikon};
-use super::tasarim::{self, ALT_CUBUK_YUKSEKLIGI, Palet};
+use super::tasarim::{self, Palet};
 use super::{HudSonucu, bilesen};
 
 pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu) {
@@ -19,8 +18,6 @@ pub fn ciz(ui: &mut egui::Ui, durum: &mut UygulamaDurumu, sonuc: &mut HudSonucu)
         yukleme_karti(&ctx, durum, p);
     } else if durum.aktif.is_none() {
         bos_ekran(&ctx, durum, sonuc, p);
-    } else {
-        zoom_pilu(&ctx, durum, sonuc, p);
     }
 }
 
@@ -123,79 +120,5 @@ fn bos_ekran(
             ) {
                 sonuc.ekle(eylem);
             }
-        });
-}
-
-fn zoom_pilu(ctx: &egui::Context, durum: &UygulamaDurumu, sonuc: &mut HudSonucu, p: Palet) {
-    Area::new(egui::Id::new("gorsel-yakinlastirma"))
-        .anchor(
-            Align2::CENTER_BOTTOM,
-            vec2(0.0, -(ALT_CUBUK_YUKSEKLIGI + tasarim::BOSLUK_MD)),
-        )
-        .order(Order::Foreground)
-        .interactable(true)
-        .show(ctx, |ui| {
-            egui::Frame::NONE
-                .fill(p.panel_opak)
-                .stroke(Stroke::new(1.0, p.kenar_guc))
-                .corner_radius(CornerRadius::same(10))
-                .inner_margin(Margin::same(3))
-                .show(ui, |ui| {
-                    ui.horizontal(|ui| {
-                        let eksi = ikon::ikon_dugme_boyut(
-                            ui,
-                            Ikon::Eksi,
-                            false,
-                            "Uzaklaştır",
-                            30.0,
-                        );
-                        if bilesen::tiklandi(ui, &eksi) {
-                            sonuc.ekle(Eylem::Yakinlastir {
-                                carpan: 1.0 / TUS_ZOOM_CARPI,
-                                pivot: None,
-                            });
-                        }
-                        ui.add_sized(
-                            [52.0, 30.0],
-                            egui::Label::new(
-                                RichText::new(durum.zoom_metni())
-                                    .monospace()
-                                    .size(11.0)
-                                    .color(p.metin),
-                            )
-                            .selectable(false),
-                        );
-                        let arti = ikon::ikon_dugme_boyut(
-                            ui,
-                            Ikon::Arti,
-                            false,
-                            "Yakınlaştır",
-                            30.0,
-                        );
-                        if bilesen::tiklandi(ui, &arti) {
-                            sonuc.ekle(Eylem::Yakinlastir {
-                                carpan: TUS_ZOOM_CARPI,
-                                pivot: None,
-                            });
-                        }
-                        ui.separator();
-                        let sigdir = egui::Button::new(
-                            RichText::new("Sığdır").size(11.0).color(p.soluk),
-                        )
-                        .frame(false)
-                        .min_size(vec2(52.0, 30.0));
-                        if ui.add(sigdir).clicked() {
-                            sonuc.ekle(Eylem::Sigdir);
-                        }
-                        let yuz = egui::Button::new(
-                            RichText::new("%100").size(11.0).color(p.soluk),
-                        )
-                        .frame(false)
-                        .min_size(vec2(46.0, 30.0));
-                        if ui.add(yuz).clicked() {
-                            sonuc.ekle(Eylem::GercekBoyut);
-                        }
-                    });
-                });
         });
 }
