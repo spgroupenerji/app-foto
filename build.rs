@@ -76,10 +76,11 @@ fn yayin_kopyasi_taze_mi(ikili: &std::path::Path) -> bool {
 /// koyar) onu kullanır; böylece yayın dosyasının adı ile ikiliye gömülen sürüm tek
 /// damgadan türetilir.
 fn derleme_surumu() -> String {
-    if let Ok(damga) = std::env::var("DERLEME_DAMGASI") {
-        if damga.len() == 12 && damga.bytes().all(|b| b.is_ascii_digit()) {
-            return format!("beta-v{damga}");
-        }
+    if let Ok(damga) = std::env::var("DERLEME_DAMGASI")
+        && damga.len() == 12
+        && damga.bytes().all(|b| b.is_ascii_digit())
+    {
+        return format!("beta-v{damga}");
     }
     let simdi =
         time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());

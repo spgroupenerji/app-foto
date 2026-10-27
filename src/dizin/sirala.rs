@@ -182,7 +182,7 @@ mod testler {
 
     #[test]
     fn yollar_dosya_adiyla_siralanir() {
-        let mut yollar = vec![
+        let mut yollar = [
             PathBuf::from(r"C:\p\resim10.jpg"),
             PathBuf::from(r"C:\p\resim2.jpg"),
             PathBuf::from(r"C:\p\resim1.jpg"),

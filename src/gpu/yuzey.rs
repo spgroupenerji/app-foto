@@ -1,11 +1,13 @@
 //! Takas zinciri (swapchain) yönetimi ve HDR yapılandırması.
 //!
-//! Format seçimi yetenek sorgusuna dayanır: ekran HDR bildiriyorsa ve aygıt
-//! `Rgba16Float` yüzeyini destekliyorsa HDR yolu açılır; aksi halde sRGB formatına düşülür.
+//! Format seçimi yetenek sorgusuna dayanır: ekran HDR bildiriyorsa, `Rgba16Float`
+//! yüzeyi `ExtendedSrgbLinear` (scRGB) renk uzayını destekliyorsa HDR yolu açılır;
+//! aksi halde SDR formatına düşülür.
 //!
-//! Renk uzayı bilinçli olarak `Srgb` seçilir: egui arayüz katmanı, hedef format sRGB
-//! olmadığında değerleri kendisi gama kodlar (`is_srgb()` kontrolü). Görüntü gölgelendiricisi
-//! aynı kuralı uyguladığı için HUD ile görsel aynı kodlamayı paylaşır ve renk kayması oluşmaz.
+//! scRGB doğrusal bir sinyaldir ve 1,0 değeri 80 nit'tir; SDR beyazı `sdr_beyaz_nits / 80`
+//! ölçeğiyle yazılır. SDR yolunda egui, hedef sRGB olmadığında değerleri kendisi gama
+//! kodlar; görüntü gölgelendiricisi aynı kuralı uygular ve HUD ile görsel aynı kodlamayı
+//! paylaşır.
 
 use std::sync::Arc;
 
@@ -17,6 +19,12 @@ use crate::cekirdek::hata::{GorselHatasi, Sonuc};
 
 /// HDR yolu için tercih edilen yüzey formatı (16-bit kayan nokta, geniş aralık).
 pub const HDR_FORMATI: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
+
+/// scRGB renk uzayında 1,0 değerinin karşılık geldiği parlaklık (nit).
+pub const SCRGB_BIRIM_NITS: f32 = 80.0;
+
+/// Anormal SDR beyazı bildirimlerinde UI'nin tüm HDR aralığını doldurmasını önleyen üst sınır.
+const AZAMI_SDR_BEYAZ_OLCEGI: f32 = 10.0;
 
 /// SDR yüzeyi için format tercih sırası.
 ///
@@ -37,6 +45,35 @@ pub fn sdr_format_sec(mevcut: &[wgpu::TextureFormat]) -> Option<wgpu::TextureFor
     TERCIH_SDR.iter().copied().find(|f| mevcut.contains(f))
 }
 
+/// Verilen renk uzayı kümesi doğrusal scRGB çıkışını (HDR) destekliyor mu.
+pub fn scrgb_destekli(renk_uzaylari: wgpu::SurfaceColorSpaces) -> bool {
+    renk_uzaylari.contains(wgpu::SurfaceColorSpaces::EXTENDED_SRGB_LINEAR)
+}
+
+/// HDR yolu yalnızca istendiğinde, ekran HDR bildirdiğinde ve scRGB desteklendiğinde açılır.
+fn hdr_yolu_sec(
+    hdr_iste: bool,
+    hdr_kullanilabilir: bool,
+    renk_uzaylari: wgpu::SurfaceColorSpaces,
+) -> bool {
+    hdr_iste && hdr_kullanilabilir && scrgb_destekli(renk_uzaylari)
+}
+
+/// SDR beyazını scRGB birimine çeviren ölçek; geçersiz bildirimde 1,0'a düşer.
+pub fn sdr_beyaz_olcegi_hesapla(sdr_beyaz_nits: f32) -> f32 {
+    if !sdr_beyaz_nits.is_finite() || sdr_beyaz_nits <= 0.0 {
+        return 1.0;
+    }
+    (sdr_beyaz_nits / SCRGB_BIRIM_NITS).min(AZAMI_SDR_BEYAZ_OLCEGI)
+}
+
+/// Shader'ın sRGB gama kodlaması uygulaması gerekiyor mu.
+///
+/// scRGB çıkışında değerler doğrusaldır; sRGB formatlarında ise kodlamayı donanım yapar.
+fn gama_kodlamasi_gerekli(hdr_kullaniliyor: bool, format: wgpu::TextureFormat) -> bool {
+    !hdr_kullaniliyor && !format.is_srgb()
+}
+
 /// Yüzey ölçüsü sıfır olamaz; simge durumuna küçültülmüş pencerede en az 1 piksel kullanılır.
 pub fn gecerli_olcu(genislik: u32, yukseklik: u32) -> (u32, u32) {
     (genislik.max(1), yukseklik.max(1))
@@ -52,12 +89,7 @@ pub struct Yuzey {
 
 impl Yuzey {
     /// Pencere için yüzeyi oluşturur, yetenekleri sorgular ve yapılandırır.
-    pub fn yeni(
-        gpu: &Gpu,
-        pencere: Arc<Window>,
-        olcu: (u32, u32),
-        hdr_iste: bool,
-    ) -> Sonuc<Self> {
+    pub fn yeni(gpu: &Gpu, pencere: Arc<Window>, olcu: (u32, u32), hdr_iste: bool) -> Sonuc<Self> {
         let surface = gpu
             .instance
             .create_surface(pencere)
@@ -72,12 +104,15 @@ impl Yuzey {
             })?;
 
         let hdr = HdrBilgi::sorgula(&surface, &gpu.adapter);
-        let hdr_kullaniliyor =
-            hdr_iste && hdr.hdr_kullanilabilir && yetenekler.formats.contains(&HDR_FORMATI);
+        let hdr_kullaniliyor = hdr_yolu_sec(
+            hdr_iste,
+            hdr.hdr_kullanilabilir,
+            yetenekler.color_spaces(HDR_FORMATI),
+        );
 
         if hdr_kullaniliyor {
             config.format = HDR_FORMATI;
-            config.color_space = wgpu::SurfaceColorSpace::Srgb;
+            config.color_space = wgpu::SurfaceColorSpace::ExtendedSrgbLinear;
         } else if let Some(format) = sdr_format_sec(&yetenekler.formats) {
             config.format = format;
             config.color_space = wgpu::SurfaceColorSpace::Srgb;
@@ -108,12 +143,17 @@ impl Yuzey {
         self.hdr_kullaniliyor
     }
 
+    /// SDR beyazını scRGB birimine (1,0 = 80 nit) çeviren ölçek.
+    pub fn sdr_beyaz_olcegi(&self) -> f32 {
+        sdr_beyaz_olcegi_hesapla(self.hdr.sdr_beyaz_nits)
+    }
+
     /// Hedef formatta gama kodlamasını shader'ın yapması gerekiyor mu.
     ///
-    /// sRGB formatlarında donanım kodlar (shader doğrusal yazar); float formatlarda
-    /// shader kodlar (egui aynı davranışı gösterir).
+    /// scRGB yüzeyinde değerler doğrusal yazılır; sRGB formatlarında kodlamayı
+    /// donanım yapar. Yalnızca SDR ve sRGB olmayan hedeflerde shader kodlar.
     pub fn gama_kodlamasi_shaderda(&self) -> bool {
-        !self.config.format.is_srgb()
+        gama_kodlamasi_gerekli(self.hdr_kullaniliyor, self.config.format)
     }
 
     /// Ölçü değişmese de yüzeyi yeniden yapılandırır.
@@ -151,8 +191,55 @@ mod testler {
         assert_eq!(HDR_FORMATI, wgpu::TextureFormat::Rgba16Float);
         assert!(
             !HDR_FORMATI.is_srgb(),
-            "float yüzey sRGB değildir; shader gama kodlaması bu yüzden gerekir"
+            "scRGB float yüzey sRGB formatı değildir"
         );
+    }
+
+    #[test]
+    fn scrgb_renk_uzayi_destegi_taninir() {
+        use wgpu::SurfaceColorSpaces as R;
+        assert!(scrgb_destekli(R::EXTENDED_SRGB_LINEAR));
+        assert!(scrgb_destekli(R::SRGB | R::EXTENDED_SRGB_LINEAR));
+        assert!(!scrgb_destekli(R::SRGB));
+        assert!(!scrgb_destekli(R::empty()));
+    }
+
+    #[test]
+    fn hdr_yolu_destek_yoksa_sdrde_kalir() {
+        use wgpu::SurfaceColorSpaces as R;
+        assert!(hdr_yolu_sec(true, true, R::EXTENDED_SRGB_LINEAR));
+        assert!(!hdr_yolu_sec(false, true, R::EXTENDED_SRGB_LINEAR));
+        assert!(!hdr_yolu_sec(true, false, R::EXTENDED_SRGB_LINEAR));
+        assert!(!hdr_yolu_sec(true, true, R::SRGB));
+    }
+
+    #[test]
+    fn sdr_beyaz_olcegi_scrgb_birimine_cevrilir() {
+        assert!((sdr_beyaz_olcegi_hesapla(80.0) - 1.0).abs() < 1e-6);
+        assert!((sdr_beyaz_olcegi_hesapla(240.0) - 3.0).abs() < 1e-6);
+        assert!((sdr_beyaz_olcegi_hesapla(120.0) - 1.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn gecersiz_sdr_beyazi_bire_duser() {
+        assert_eq!(sdr_beyaz_olcegi_hesapla(0.0), 1.0);
+        assert_eq!(sdr_beyaz_olcegi_hesapla(-80.0), 1.0);
+        assert_eq!(sdr_beyaz_olcegi_hesapla(f32::NAN), 1.0);
+        assert_eq!(sdr_beyaz_olcegi_hesapla(f32::INFINITY), 1.0);
+        assert_eq!(sdr_beyaz_olcegi_hesapla(80_000.0), AZAMI_SDR_BEYAZ_OLCEGI);
+    }
+
+    #[test]
+    fn hdr_yolunda_shader_gama_kodlamaz() {
+        assert!(!gama_kodlamasi_gerekli(true, HDR_FORMATI));
+        assert!(gama_kodlamasi_gerekli(
+            false,
+            wgpu::TextureFormat::Bgra8Unorm
+        ));
+        assert!(!gama_kodlamasi_gerekli(
+            false,
+            wgpu::TextureFormat::Bgra8UnormSrgb
+        ));
     }
 
     #[test]

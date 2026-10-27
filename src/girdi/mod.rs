@@ -46,6 +46,12 @@ pub enum Eylem {
     VarsayilanUygulamaSayfasi,
     YenidenYukle,
     AyarPenceresi,
+    /// Komut paletini aç/kapat.
+    KomutPaleti,
+    /// Komut paletini kapat.
+    KomutPaletiKapat,
+    /// Dizin listesi satır yoğunluğunu değiştir.
+    YogunlukDegistir,
     MetaPaneliDegistir,
     /// Dizin listesinde tıklanan görsle gidilir.
     Git(usize),

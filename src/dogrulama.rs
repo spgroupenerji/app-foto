@@ -587,6 +587,8 @@ fn gpu_kontrolleri() -> Vec<Kontrol> {
         false,
         true,
         [24, 24, 28],
+        false,
+        1.0,
     );
     if uniform.yerlesim[0].is_finite() && uniform.donusum[0].is_finite() {
         kontroller.push(Kontrol::basarili(

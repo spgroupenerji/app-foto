@@ -13,6 +13,8 @@ use crate::goruntu::YuklemeAsamasi;
 
 /// Durum ve hata mesajlarının ekranda kalma süresi.
 pub const MESAJ_SURESI: Duration = Duration::from_secs(5);
+/// Hata mesajları bilgi mesajlarından daha uzun kalır.
+pub const HATA_MESAJ_SURESI: Duration = Duration::from_secs(8);
 
 /// Küçük resim eşlemesinin en çok tutacağı kayıt (bellek sınırı: kayıt başına ≤ 64 KB).
 pub const ONIZLEME_ESIK: usize = 600;
@@ -59,14 +61,22 @@ pub struct Mesaj {
 }
 
 impl Mesaj {
+    fn sure(&self) -> Duration {
+        if self.onemli {
+            HATA_MESAJ_SURESI
+        } else {
+            MESAJ_SURESI
+        }
+    }
+
     pub fn suresi_gecti(&self) -> bool {
-        self.olusturma.elapsed() > MESAJ_SURESI
+        self.olusturma.elapsed() > self.sure()
     }
 
     /// Kalan gösterim oranı (1,0 = yeni, 0,0 = süresi doldu).
     pub fn kalan_oran(&self) -> f32 {
         let gecen = self.olusturma.elapsed().as_secs_f32();
-        (1.0 - gecen / MESAJ_SURESI.as_secs_f32()).clamp(0.0, 1.0)
+        (1.0 - gecen / self.sure().as_secs_f32()).clamp(0.0, 1.0)
     }
 }
 
@@ -99,6 +109,12 @@ pub struct UygulamaDurumu {
     pub mesaj: Option<Mesaj>,
     /// Ayarlar penceresi açık mı.
     pub ayar_penceresi: bool,
+    /// Komut paleti açık mı.
+    pub komut_paleti: bool,
+    /// Komut paletindeki arama metni.
+    pub komut_arama: String,
+    /// Komut paletinde seçili satır.
+    pub komut_secili: usize,
     /// Pencere tam ekran kipinde mi.
     pub tam_ekran: bool,
     /// Bağlam menüsü konumu (ekran pikseli) — açık değilse `None`.
@@ -135,6 +151,9 @@ impl UygulamaDurumu {
             hdr_yuzey: false,
             mesaj: None,
             ayar_penceresi: false,
+            komut_paleti: false,
+            komut_arama: String::new(),
+            komut_secili: 0,
             tam_ekran: false,
             baglam_menusu: None,
             adaptor_bilgisi: String::new(),

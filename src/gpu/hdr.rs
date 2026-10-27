@@ -8,7 +8,8 @@
 /// Ton haritalama için güvenli varsayılan tepe parlaklık (nit).
 pub const VARSAYILAN_TEPE_NITS: f32 = 1000.0;
 
-/// Windows'ta tipik SDR beyaz referansı (nit). scRGB'de 1,0 değeri bu parlaklığa karşılık gelir.
+/// Windows'ta tipik SDR beyaz referansı (nit). scRGB'de SDR beyazı, 80 nit'lik birime
+/// bölünerek (`sdr_beyaz_nits / 80`) ölçeklenir.
 pub const VARSAYILAN_SDR_BEYAZ_NITS: f32 = 240.0;
 
 /// Ton haritalama altında kabul edilen en düşük tepe değer.

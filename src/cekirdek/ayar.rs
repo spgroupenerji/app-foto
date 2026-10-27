@@ -125,6 +125,10 @@ pub struct Ayarlar {
     pub dosya_listesi_genislik: f32,
     /// Bilgi panelinin kullanıcı genişliği (puan).
     pub bilgi_paneli_genislik: f32,
+    /// Dizin listesi satır yoğunluğu.
+    pub liste_yogunlugu: Yogunluk,
+    /// Panel ve bildirim geçişlerini kapat.
+    pub hareket_azalt: bool,
 }
 
 /// Yeni görsel açılışında uygulanacak yakınlaştırma kipi.
@@ -156,6 +160,31 @@ pub enum PanelYeri {
     Sag,
 }
 
+/// Dizin listesi satır yoğunluğu.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Yogunluk {
+    #[default]
+    Rahat,
+    Kompakt,
+}
+
+impl Yogunluk {
+    pub fn degistir(self) -> Self {
+        match self {
+            Self::Rahat => Self::Kompakt,
+            Self::Kompakt => Self::Rahat,
+        }
+    }
+
+    pub fn etiket(self) -> &'static str {
+        match self {
+            Self::Rahat => "Rahat",
+            Self::Kompakt => "Kompakt",
+        }
+    }
+}
+
 impl Default for Ayarlar {
     fn default() -> Self {
         Self {
@@ -180,6 +209,8 @@ impl Default for Ayarlar {
             dosya_listesi_yeri: PanelYeri::default(),
             dosya_listesi_genislik: 260.0,
             bilgi_paneli_genislik: 300.0,
+            liste_yogunlugu: Yogunluk::default(),
+            hareket_azalt: false,
         }
     }
 }

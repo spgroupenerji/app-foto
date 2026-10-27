@@ -234,11 +234,10 @@ fn dosya_oku_ilerlemeli(yol: &Path, ilerleme: Option<&YuklemeIlerleme>) -> Sonuc
                     Ok(n) => {
                         tampon.truncate(baslangic + n);
                         okunan_toplam += n as u64;
-                        let promil = if boyut == 0 {
-                            1000
-                        } else {
-                            okunan_toplam * 1000 / boyut
-                        };
+                        let promil = okunan_toplam
+                            .saturating_mul(1000)
+                            .checked_div(boyut)
+                            .unwrap_or(1000);
                         i.okuma_ilerlet(promil);
                     }
                     Err(k) if k.kind() == std::io::ErrorKind::Interrupted => continue,

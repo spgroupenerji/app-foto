@@ -9,13 +9,13 @@ use crate::girdi::bolge::Gorunum;
 use crate::goruntu::renk::srgb_bayt_doğrusal;
 
 /// Gölgelendiriciye aktarılan kare sabitleri. WGSL tarafındaki `GoruntuUniform` ile
-/// alan alan örtüşür (16 bayt hizalama kuralına uygun dolgu içerir).
+/// alan alan örtüşür ve 16 bayt hizalama kuralına uyar.
 #[repr(C)]
 #[derive(Debug, Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct GoruntuUniform {
     /// Kaynak dokunun piksel ölçüsü.
     pub doku_boyutu: [f32; 2],
-    /// 16 bayt hizalaması için dolgu.
+    /// x = çıkış scRGB doğrusal mı (1/0), y = SDR beyazının scRGB ölçeği.
     pub dolgu: [f32; 2],
     /// Görüntü merkezinin pencere içindeki yeri (0-1) ve pencere ölçüsü (piksel).
     pub yerlesim: [f32; 4],
@@ -31,7 +31,7 @@ impl Default for GoruntuUniform {
     fn default() -> Self {
         Self {
             doku_boyutu: [1.0, 1.0],
-            dolgu: [0.0, 0.0],
+            dolgu: [0.0, 1.0],
             yerlesim: [0.5, 0.5, 1.0, 1.0],
             donusum: [0.5, 0.5, 0.0, 0.0],
             ton: [
@@ -55,9 +55,21 @@ pub fn uniform_olustur(
     hdr_kaynak: bool,
     gama_shaderda: bool,
     arka_plan_srgb: [u8; 3],
+    cikis_hdr: bool,
+    sdr_beyaz_olcek: f32,
 ) -> GoruntuUniform {
     let (gw, gh) = (goruntu_olcusu.0 as f32, goruntu_olcusu.1 as f32);
-    let (ww, wh) = (pencere_olcusu.0.max(1) as f32, pencere_olcusu.1.max(1) as f32);
+    let (ww, wh) = (
+        pencere_olcusu.0.max(1) as f32,
+        pencere_olcusu.1.max(1) as f32,
+    );
+    // SDR çıkışında ölçek anlamsızdır (1,0); HDR çıkışında geçersiz değer güvenli
+    // varsayılana düşer.
+    let sdr_olcek = if cikis_hdr && sdr_beyaz_olcek.is_finite() && sdr_beyaz_olcek > 0.0 {
+        sdr_beyaz_olcek
+    } else {
+        1.0
+    };
 
     // Görüntünün ekrandaki ölçüsü ve merkezi (pencere pikseli, y aşağı).
     let gosterim_w = gw * gorunum.olcek as f32;
@@ -67,7 +79,7 @@ pub fn uniform_olustur(
 
     GoruntuUniform {
         doku_boyutu: [gw.max(1.0), gh.max(1.0)],
-        dolgu: [0.0, 0.0],
+        dolgu: [if cikis_hdr { 1.0 } else { 0.0 }, sdr_olcek],
         yerlesim: [merkez_x / ww, merkez_y / wh, ww, wh],
         donusum: [gosterim_w / ww / 2.0, gosterim_h / wh / 2.0, 0.0, 0.0],
         ton: [
@@ -100,9 +112,7 @@ impl GoruntuBorusu {
             .device
             .create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some("goruntu-golgelendirici"),
-                source: wgpu::ShaderSource::Wgsl(
-                    include_str!("../shader/goruntu.wgsl").into(),
-                ),
+                source: wgpu::ShaderSource::Wgsl(include_str!("../shader/goruntu.wgsl").into()),
             });
 
         let yerlesim = gpu
@@ -223,13 +233,90 @@ mod testler {
     fn uniform_boyu_on_alti_bayt_katı() {
         assert_eq!(std::mem::size_of::<GoruntuUniform>() % 16, 0);
         assert_eq!(std::mem::size_of::<GoruntuUniform>(), 80);
+        assert_eq!(std::mem::offset_of!(GoruntuUniform, dolgu), 8);
+        assert_eq!(std::mem::offset_of!(GoruntuUniform, ton), 48);
+        assert_eq!(std::mem::offset_of!(GoruntuUniform, arka_plan), 64);
+    }
+
+    #[test]
+    fn scrgb_bayraklari_uniforma_yazilir() {
+        let hdr = HdrBilgi {
+            hdr_kullanilabilir: true,
+            tepe_nits: 800.0,
+            sdr_beyaz_nits: 240.0,
+            headroom: 4.0,
+        };
+        let h = uniform_olustur(
+            (10, 10),
+            &Gorunum::default(),
+            (10, 10),
+            &hdr,
+            false,
+            false,
+            [0, 0, 0],
+            true,
+            3.0,
+        );
+        assert_eq!(h.dolgu, [1.0, 3.0], "HDR çıkışı ve scRGB ölçeği");
+
+        let s = uniform_olustur(
+            (10, 10),
+            &Gorunum::default(),
+            (10, 10),
+            &hdr,
+            false,
+            true,
+            [0, 0, 0],
+            false,
+            3.0,
+        );
+        assert_eq!(s.dolgu, [0.0, 1.0], "SDR çıkışında ölçek 1,0");
+    }
+
+    #[test]
+    fn gecersiz_sdr_olcegi_uniformda_bire_duser() {
+        let u = uniform_olustur(
+            (10, 10),
+            &Gorunum::default(),
+            (10, 10),
+            &HdrBilgi::default(),
+            false,
+            false,
+            [0, 0, 0],
+            true,
+            f32::NAN,
+        );
+        assert_eq!(u.dolgu, [1.0, 1.0]);
+    }
+
+    #[test]
+    fn goruntu_golgelendiricisi_gecerli_wgsl() {
+        let modul = wgpu::naga::front::wgsl::parse_str(include_str!("../shader/goruntu.wgsl"))
+            .expect("goruntu.wgsl ayrıştırılmalı");
+        let mut dogrulayici = wgpu::naga::valid::Validator::new(
+            wgpu::naga::valid::ValidationFlags::all(),
+            wgpu::naga::valid::Capabilities::all(),
+        );
+        dogrulayici
+            .validate(&modul)
+            .expect("goruntu.wgsl doğrulanmalı");
     }
 
     #[test]
     fn yerlesim_matematigi_dogru() {
         // %100 ölçek, kaydırma yok, 400x300 pencere ve 200x100 görüntü.
         let gorunum = Gorunum::default();
-        let u = uniform_olustur((200, 100), &gorunum, (400, 300), &HdrBilgi::default(), false, true, [0, 0, 0]);
+        let u = uniform_olustur(
+            (200, 100),
+            &gorunum,
+            (400, 300),
+            &HdrBilgi::default(),
+            false,
+            true,
+            [0, 0, 0],
+            false,
+            1.0,
+        );
         assert_eq!(u.doku_boyutu, [200.0, 100.0]);
         // Merkez pencere ortasında.
         assert!((u.yerlesim[0] - 0.5).abs() < 1e-6);
@@ -247,7 +334,17 @@ mod testler {
             kaydirma_x: 50.0,
             kaydirma_y: -25.0,
         };
-        let u = uniform_olustur((100, 100), &gorunum, (400, 400), &HdrBilgi::default(), false, false, [0, 0, 0]);
+        let u = uniform_olustur(
+            (100, 100),
+            &gorunum,
+            (400, 400),
+            &HdrBilgi::default(),
+            false,
+            false,
+            [0, 0, 0],
+            false,
+            1.0,
+        );
         // merkez_piksel = 200 + 50*2 = 300 → 300/400 = 0,75
         assert!((u.yerlesim[0] - 0.75).abs() < 1e-6);
         // 200 - 25*2 = 150 → 150/400 = 0,375
@@ -265,29 +362,79 @@ mod testler {
             sdr_beyaz_nits: 200.0,
             headroom: 4.0,
         };
-        let u = uniform_olustur((10, 10), &gorunum, (10, 10), &hdr, true, true, [0, 0, 0]);
+        let u = uniform_olustur(
+            (10, 10),
+            &gorunum,
+            (10, 10),
+            &hdr,
+            true,
+            true,
+            [0, 0, 0],
+            false,
+            1.0,
+        );
         assert_eq!(u.ton[0], 800.0);
         assert_eq!(u.ton[1], 200.0);
         assert_eq!(u.ton[2], 1.0, "HDR kaynak bayrağı");
         assert_eq!(u.ton[3], 1.0, "shader gama kodlaması");
 
-        let sdr = uniform_olustur((10, 10), &gorunum, (10, 10), &HdrBilgi::default(), false, false, [0, 0, 0]);
+        let sdr = uniform_olustur(
+            (10, 10),
+            &gorunum,
+            (10, 10),
+            &HdrBilgi::default(),
+            false,
+            false,
+            [0, 0, 0],
+            false,
+            1.0,
+        );
         assert_eq!(sdr.ton[2], 0.0);
         assert_eq!(sdr.ton[3], 0.0);
     }
 
     #[test]
     fn arka_plan_dogrusallastirilir() {
-        let u = uniform_olustur((10, 10), &Gorunum::default(), (10, 10), &HdrBilgi::default(), false, false, [255, 255, 255]);
+        let u = uniform_olustur(
+            (10, 10),
+            &Gorunum::default(),
+            (10, 10),
+            &HdrBilgi::default(),
+            false,
+            false,
+            [255, 255, 255],
+            false,
+            1.0,
+        );
         assert!((u.arka_plan[0] - 1.0).abs() < 1e-6);
         assert_eq!(u.arka_plan[3], 1.0, "arka plan opak olmalı");
-        let siyah = uniform_olustur((10, 10), &Gorunum::default(), (10, 10), &HdrBilgi::default(), false, false, [0, 0, 0]);
+        let siyah = uniform_olustur(
+            (10, 10),
+            &Gorunum::default(),
+            (10, 10),
+            &HdrBilgi::default(),
+            false,
+            false,
+            [0, 0, 0],
+            false,
+            1.0,
+        );
         assert_eq!(siyah.arka_plan[0], 0.0);
     }
 
     #[test]
     fn sifir_pencere_bolme_hatasi_vermez() {
-        let u = uniform_olustur((10, 10), &Gorunum::default(), (0, 0), &HdrBilgi::default(), false, false, [0, 0, 0]);
+        let u = uniform_olustur(
+            (10, 10),
+            &Gorunum::default(),
+            (0, 0),
+            &HdrBilgi::default(),
+            false,
+            false,
+            [0, 0, 0],
+            false,
+            1.0,
+        );
         assert!(u.yerlesim[0].is_finite());
         assert!(u.donusum[0].is_finite());
     }

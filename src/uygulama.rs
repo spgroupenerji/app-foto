@@ -62,8 +62,8 @@ pub struct Uygulama {
     cikis_istendi: bool,
     /// Paneller/tema gibi ayar alanları değişti: bir sonraki karede diske yazılır.
     ayar_degisti: bool,
-    /// egui bağlamına uygulanan son tema; farklıysa bir sonraki karede yeniden uygulanır.
-    tema_uygulandi: Option<Tema>,
+    /// egui bağlamına uygulanan son tema ve hareket tercihi; farklıysa yeniden uygulanır.
+    tema_uygulandi: Option<(Tema, bool)>,
 
     // Pencereye bağlı bileşenler (resumed ile kurulur).
     gpu: Option<Gpu>,
@@ -104,6 +104,9 @@ impl Uygulama {
         let mut durum = UygulamaDurumu::yeni(ayarlar.clone());
         durum.vram_komsu = ayarlar.on_yukleme.vram_komsu();
 
+        let egui_baglam = egui::Context::default();
+        hud::tasarim::fontlari_yukle(&egui_baglam);
+
         Self {
             durum,
             ayarlar,
@@ -120,7 +123,7 @@ impl Uygulama {
             yuzey: None,
             cizim: None,
             doku: None,
-            egui_baglam: egui::Context::default(),
+            egui_baglam,
             egui_winit: None,
             dizin_izleyici: None,
             veritabani: MetaVeritabani::varsayilan().ok(),
@@ -790,6 +793,18 @@ impl Uygulama {
                 self.durum.bilgi_ver("Görsel yeniden yüklendi.");
             }
             Eylem::AyarPenceresi => self.durum.ayar_penceresi = !self.durum.ayar_penceresi,
+            Eylem::KomutPaleti => {
+                self.durum.komut_paleti = !self.durum.komut_paleti;
+                if self.durum.komut_paleti {
+                    self.durum.komut_arama.clear();
+                    self.durum.komut_secili = 0;
+                }
+            }
+            Eylem::KomutPaletiKapat => self.durum.komut_paleti = false,
+            Eylem::YogunlukDegistir => {
+                self.ayarlar.liste_yogunlugu = self.ayarlar.liste_yogunlugu.degistir();
+                self.ayar_degisti = true;
+            }
             Eylem::MetaPaneliDegistir => {
                 self.ayarlar.bilgi_paneli_acik = !self.ayarlar.bilgi_paneli_acik;
                 self.ayar_degisti = true;
@@ -989,10 +1004,11 @@ impl Uygulama {
 
         // egui bağlamı Arc tabanlı bir tutamaçtır: klonlamak ucuzdur ve ödünç çakışmasını önler.
         let ctx = self.egui_baglam.clone();
-        // Tema tercihi değiştiyse (ilk kare dahil) palet ve tercih yeniden uygulanır.
-        if self.tema_uygulandi != Some(self.ayarlar.tema) {
-            hud::tema_uygula(&ctx, self.ayarlar.tema);
-            self.tema_uygulandi = Some(self.ayarlar.tema);
+        // Tema veya hareket tercihi değiştiyse (ilk kare dahil) stil yeniden uygulanır.
+        let gorunum = (self.ayarlar.tema, self.ayarlar.hareket_azalt);
+        if self.tema_uygulandi != Some(gorunum) {
+            hud::tema_uygula(&ctx, gorunum.0, gorunum.1);
+            self.tema_uygulandi = Some(gorunum);
             self.kirli = true;
         }
         let durum = &mut self.durum;
@@ -1058,6 +1074,8 @@ impl Uygulama {
                 self.durum.hdr_kaynak,
                 yuzey.gama_kodlamasi_shaderda(),
                 self.ayarlar.arka_plan,
+                yuzey.hdr_aktif(),
+                yuzey.sdr_beyaz_olcegi(),
             )
         };
 

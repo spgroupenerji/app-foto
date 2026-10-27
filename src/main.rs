@@ -264,6 +264,7 @@ KISAYOLLAR:
   S / G                        sığdır / gerçek boyut
   F11 / F / çift tık           tam ekran
   Ctrl + K                     ayarlar
+  Ctrl + P                     komut paleti
   I                            bilgi panelini aç/kapat
   L                            dizin listesini aç/kapat
 

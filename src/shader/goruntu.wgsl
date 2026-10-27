@@ -10,7 +10,8 @@
 struct GoruntuUniform {
     // Kaynak dokunun piksel ölçüsü.
     doku_boyutu: vec2<f32>,
-    _dolgu: vec2<f32>,
+    // x = çıkış scRGB doğrusal mı (1/0), y = SDR beyazının scRGB ölçeği.
+    dolgu: vec2<f32>,
     // Görüntü merkezinin pencere içindeki yeri (0-1 aralığında, xy) ve pencere ölçüsü (piksel, zw).
     yerlesim: vec4<f32>,
     // Görüntünün pencereye göre yarı ölçüsü (0-1 aralığında, xy).
@@ -107,6 +108,45 @@ fn ton_haritala(renk: vec3<f32>, tepe_nits: f32, beyaz_nits: f32) -> vec3<f32> {
     return sikistirilmis * (beyaz / tepe);
 }
 
+// scRGB renk uzayında 1.0 = 80 nit'tir; SDR beyazı sdr_beyaz_nits / 80 ölçeğiyle yazılır.
+const SCRGB_BIRIM_NITS: f32 = 80.0;
+
+// HDR kaynağı nite çevirip yumuşak diz ile tepe parlaklığa sıkıştırır, sonra scRGB'ye böler.
+// SDR beyazının altındaki değerler değişmez; üstündeki değerler üstel olarak tepeye yaklaşır.
+fn hdr_scrgb(renk: vec3<f32>, sdr_beyaz_nits: f32, tepe_nits: f32) -> vec3<f32> {
+    let beyaz = max(sdr_beyaz_nits, 1.0);
+    let tepe = max(tepe_nits, beyaz);
+    let nit = max(renk, vec3<f32>(0.0)) * beyaz;
+    let fark = tepe - beyaz;
+    if (fark <= 1e-3) {
+        return min(nit, vec3<f32>(beyaz)) / SCRGB_BIRIM_NITS;
+    }
+    let asan = max(nit - vec3<f32>(beyaz), vec3<f32>(0.0));
+    let sikistirilmis = min(nit, vec3<f32>(beyaz))
+        + vec3<f32>(fark) * (vec3<f32>(1.0) - exp(-asan / vec3<f32>(fark)));
+    return sikistirilmis / SCRGB_BIRIM_NITS;
+}
+
+// Çıkış kodlaması: scRGB yüzeyinde doğrusal değer yazılır, gama kodlaması yapılmaz;
+// SDR yüzeyinde HDR kaynak ton haritalanır ve gerekiyorsa sRGB kodlanır.
+fn cikti_rengi(renk: vec3<f32>, hdr_kaynak: bool) -> vec3<f32> {
+    if (ayar.dolgu.x > 0.5) {
+        if (hdr_kaynak) {
+            return hdr_scrgb(renk, ayar.ton.y, ayar.ton.x);
+        }
+        return max(renk, vec3<f32>(0.0)) * ayar.dolgu.y;
+    }
+
+    var sonuc = renk;
+    if (hdr_kaynak) {
+        sonuc = ton_haritala(sonuc, ayar.ton.x, ayar.ton.y);
+    }
+    if (ayar.ton.w > 0.5) {
+        sonuc = dogrusaldan_srgb(sonuc);
+    }
+    return sonuc;
+}
+
 @fragment
 fn fs_ana(girdi: TepeCikti) -> @location(0) vec4<f32> {
     // Pencere pikselinden görüntü UV'sine: yerel 0-1 aralığı, sol üst köşe orijin.
@@ -117,21 +157,10 @@ fn fs_ana(girdi: TepeCikti) -> @location(0) vec4<f32> {
 
     // Görüntü dikdörtgeninin dışı arka plan rengini alır.
     if (yerel.x < 0.0 || yerel.x > 1.0 || yerel.y < 0.0 || yerel.y > 1.0) {
-        return ayar.arka_plan;
+        return vec4<f32>(cikti_rengi(ayar.arka_plan.rgb, false), ayar.arka_plan.a);
     }
 
-    var renk = catmull_rom_4(yerel);
-    let alfa = renk.a;
-
-    if (ayar.ton.z > 0.5) {
-        renk = vec4<f32>(ton_haritala(renk.rgb, ayar.ton.x, ayar.ton.y), alfa);
-    }
-
-    // Hedef format sRGB değilse (float yüzey) değerler shader içinde sRGB kodlanır;
-    // egui aynı hedefte aynı kodlamayı uyguladığı için HUD ile görüntü tutarlı kalır.
-    if (ayar.ton.w > 0.5) {
-        renk = vec4<f32>(dogrusaldan_srgb(renk.rgb), alfa);
-    }
-
-    return renk;
+    let renk = catmull_rom_4(yerel);
+    let hdr_kaynak = ayar.ton.z > 0.5;
+    return vec4<f32>(cikti_rengi(renk.rgb, hdr_kaynak), renk.a);
 }

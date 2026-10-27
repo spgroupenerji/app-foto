@@ -36,6 +36,7 @@ pub fn tus_eylemi(kod: KeyCode, ctrl: bool, shift: bool) -> Eylem {
             }
             KeyCode::KeyE => return Eylem::BirlikteAc,
             KeyCode::KeyK | KeyCode::Comma => return Eylem::AyarPenceresi,
+            KeyCode::KeyP => return Eylem::KomutPaleti,
             KeyCode::KeyW | KeyCode::KeyQ => return Eylem::Kapat,
             _ => {}
         }
@@ -138,6 +139,7 @@ mod testler {
         assert_eq!(tus_eylemi(KeyCode::KeyE, true, false), Eylem::BirlikteAc);
         assert_eq!(tus_eylemi(KeyCode::KeyO, false, false), Eylem::Yok);
         assert_eq!(tus_eylemi(KeyCode::KeyK, true, false), Eylem::AyarPenceresi);
+        assert_eq!(tus_eylemi(KeyCode::KeyP, true, false), Eylem::KomutPaleti);
         assert_eq!(tus_eylemi(KeyCode::KeyW, true, false), Eylem::Kapat);
         assert_eq!(tus_eylemi(KeyCode::KeyQ, true, false), Eylem::Kapat);
         assert_eq!(tus_eylemi(KeyCode::Digit0, true, false), Eylem::GercekBoyut);

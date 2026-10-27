@@ -8,6 +8,7 @@ egui arayüz çerçevesi ve wgpu grafik altyapısıyla geliştirilen, çok iş p
 - Biçim tespitinin dosya içeriği imzasıyla (magic bytes) yapılması; uzantı bilgisine güvenilmemesi
 - wgpu tabanlı GPU hızlandırmalı render; HDR ekranlarda HDR çıkışı ve SDR ekranlara ton haritalama
 - Gömülü ICC renk profillerinin lcms2 ile dönüştürülmesi; EXIF yönelim bilgisinin uygulanması
+- HDR kaynakların scRGB doğrusal çıkışa tonlanması; SDR arayüz katmanının ayrı dokuda doğrusal olarak birleştirilmesi (HDR ekranlarda doğru parlaklık ve renk uzayı)
 - Catmull-Rom filtreyle keskin ölçekleme; Ctrl+tekerlek ile imleç odaklı akıcı yakınlaştırma, sığdırma ve yüzde yüz gerçek boyut
 - Kayan pencere ile komşu görsellerin ön yüklenmesi; ayarlanabilir RAM önbelleği (64 MB–8 GB) ve VRAM komşu doku desteğiyle akıcı gezinme
 - Ok tuşları, PageUp/PageDown, Home/End ve tıklama bölgeleriyle hızlı gezinme; sürükle-bırak ile dosya ve klasör açma
@@ -15,8 +16,11 @@ egui arayüz çerçevesi ve wgpu grafik altyapısıyla geliştirilen, çok iş p
 - Küçük resimli dizin listesi paneli: küçük resimler yalnızca görünür satırlar için arka planda üretilir ve sınırlı bellekte tutulur (ağ paylaşımlarında akıcı kalır); panel genişliği sürüklenerek değiştirilir ve oturumlar arası hatırlanır; her satırda boyut/tarih bilgisi, dizindeki en yeni görselde "YENİ" rozeti ve harici uygulamada açma ("Birlikte Aç") eylemi bulunur
 - Ekranda beklenen görsel, öncelik kuyruğuyla ön yükleme işlerinin önünden geçer; okuma aşaması yüzde değerli ilerleme çubuğuyla, kod çözme aşaması geçen süre göstergesiyle izlenir
 - Varsayılan kapalı açılan bilgi paneli (biçim, çözünürlük, renk profili, önbellek ve aygıt bilgisi), ayarlar penceresi, bağlam menüsü ve tam ekran kipi; araç çubuğu yalnızca en sık işlemleri taşır, kalan tüm işlemler çubuğun sonundaki "Daha fazla" menüsünde hızlı erişim listesi olarak toplanır
+- shadcn v4 token düzenini izleyen hafif tasarım sistemi: semantik renkler, tutarlı boşluk/yarıçap ölçeği, sistem fontları, vektörel Lucide çizgi simgeleri ve 44 px dokunmatik hedefler
+- Komut paleti (Ctrl+P): dosya, görünüm ve panel eylemlerini gruplu, aranabilir ve klavyeyle gezilebilir biçimde sunar; ayarlar ortalanmış modal, geri bildirimler kapatılabilir toast olarak gösterilir
+- Dizin listesi yalnızca görünür satırları çizer (sanallaştırma); 1.000+ dosyada kaydırma ve küçük resim üretimi akıcı kalır; panel yoğunluğu rahat/kompakt olarak seçilebilir
 - Simgeli düğmeler font glifi yerine vektörel çizilir; bozuk glif ve tema uyumsuzlukları yaşanmaz
-- Koyu/açık/sistem tema seçimi; panel ve tema tercihlerinin oturumlar arası hatırlanması
+- Koyu/açık/sistem tema seçimi; panel, tema ve hareket tercihlerinin oturumlar arası hatırlanması
 - Kurumsal koyu ve açık palet; WCAG 2.5.5 ve Apple HIG ile uyumlu 44 px dokunma hedefleri
 
 ## Hazır Uygulama
